@@ -1339,6 +1339,21 @@ body {
 .nf-meta-unit { width: 36px; text-align: center; }
 .nf-meta-total { width: 72px; font-weight: 600; }
 
+.nf-add-item-btn {
+  width: 100%;
+  padding: 8px;
+  margin: 6px 0;
+  background: #f0f9ff;
+  border: 1.5px dashed #7dd3fc;
+  border-radius: 8px;
+  color: #0369a1;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.nf-add-item-btn:active { background: #e0f2fe; }
+
 .nf-cadastrar-btn {
   display: flex;
   align-items: center;
