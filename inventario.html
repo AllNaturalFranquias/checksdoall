@@ -28,10 +28,11 @@
 
     <!-- Seletor de semana (dentro do header) -->
     <div class="inv-week-bar-inner">
-      <button class="inv-week-btn active" data-week="1" onclick="switchWeek(1)">Sem. 1</button>
-      <button class="inv-week-btn" data-week="2" onclick="switchWeek(2)">Sem. 2</button>
-      <button class="inv-week-btn" data-week="3" onclick="switchWeek(3)">Sem. 3</button>
-      <button class="inv-week-btn" data-week="4" onclick="switchWeek(4)">Sem. 4</button>
+      <span id="invWeekLabel" class="inv-week-month-label"></span>
+      <button class="inv-week-btn active" data-week="1" onclick="switchWeek(1)">Sem 1</button>
+      <button class="inv-week-btn" data-week="2" onclick="switchWeek(2)">Sem 2</button>
+      <button class="inv-week-btn" data-week="3" onclick="switchWeek(3)">Sem 3</button>
+      <button class="inv-week-btn" data-week="4" onclick="switchWeek(4)">Sem 4</button>
     </div>
 
     <nav class="inv-tabs" id="invTabs">
