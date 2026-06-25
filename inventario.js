@@ -564,7 +564,7 @@ async function init() {
 
   loadState();
   updateCloudStatus('sync');
-  await Promise.all([loadGeminiKey(), loadPins()]);
+  await Promise.all([loadGeminiKey(), loadPins(), loadLinhas()]);
 
   await loadUnitConfig();
   applyUnitConfig();
@@ -1308,6 +1308,7 @@ function openAddNota() {
   document.getElementById('notaFornecedor').value = '';
   document.getElementById('notaValor').value = '';
   document.getElementById('notaData').value = new Date().toISOString().slice(0,10);
+  populateLinhaSelect('notaLinha');
   setTimeout(() => document.getElementById('notaFornecedor').focus(), 100);
 }
 
@@ -1319,6 +1320,7 @@ function saveNota() {
   const fornecedor = document.getElementById('notaFornecedor').value.trim();
   const valor      = parseFloat(document.getElementById('notaValor').value);
   const data       = document.getElementById('notaData').value;
+  const linha      = document.getElementById('notaLinha')?.value || 'Outros';
 
   if (!fornecedor || isNaN(valor) || valor <= 0) {
     document.getElementById('notaFornecedor').classList.toggle('error', !fornecedor);
@@ -1326,13 +1328,13 @@ function saveNota() {
     return;
   }
 
+  learnFornecedorLinha(fornecedor, linha);
   const d = getCMVData();
   if (!d.notas) d.notas = [];
   d.notas.push({
-    id:         Date.now().toString(36),
-    fornecedor,
-    valor,
-    data:       data ? new Date(data).toLocaleDateString('pt-BR') : ''
+    id: Date.now().toString(36),
+    fornecedor, linha, valor,
+    data: data ? new Date(data).toLocaleDateString('pt-BR') : ''
   });
   closeAddNota();
   doSave();
@@ -1814,6 +1816,7 @@ function showNFReview(geminiData) {
   const fornEl = document.getElementById('nfRevFornecedor');
   const dataEl = document.getElementById('nfRevData');
   if (fornEl) fornEl.value = geminiData.fornecedor || '';
+  populateLinhaSelect('nfRevLinha', geminiData.fornecedor || '');
   if (dataEl && geminiData.data) {
     const p = geminiData.data.split('/');
     if (p.length === 3) dataEl.value = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
@@ -1927,7 +1930,9 @@ async function confirmNFItems() {
   // Salvar nota
   const d = getCMVData();
   if (!d.notas) d.notas = [];
-  d.notas.push({ id: Date.now().toString(36), fornecedor, valor: total, data: dataFmt });
+  const linha = document.getElementById('nfRevLinha')?.value || 'Outros';
+  learnFornecedorLinha(fornecedor, linha);
+  d.notas.push({ id: Date.now().toString(36), fornecedor, linha, valor: total, data: dataFmt });
 
   // Atualizar cotações com preços lidos
   const q = getQuinzena(state.semana);
@@ -1994,6 +1999,7 @@ function renderCMVPanel() {
         📷 Foto NF${geminiOk ? '' : ' ⚠'}
       </button>
       ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openCMVConfig()">⚙ CMV</button>` : ''}
+      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openLinhas()" title="Gerenciar linhas de produto">📦 Linhas</button>` : ''}
       ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openGeminiKeyModal()" title="Configurar chave Gemini">🔑 IA</button>` : ''}
       ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openTrocarPin()" title="Trocar meu PIN">👤 PIN</button>` : ''}
     </div>`;
@@ -2001,12 +2007,28 @@ function renderCMVPanel() {
   const notasHtml = notas.length
     ? notas.map(n => `
         <div class="cmv-panel-nota">
-          <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
+          <div style="display:flex;flex-direction:column;gap:1px;flex:1;min-width:0">
+            <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
+            ${n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>` : ''}
+          </div>
           <span class="cmv-panel-nota-data">${n.data || ''}</span>
           <span class="cmv-panel-nota-val">R$ ${fmt(n.valor)}</span>
           <button class="cmv-nota-del" onclick="deleteNota('${n.id}')">✕</button>
         </div>`).join('')
     : `<p class="cmv-panel-notas-vazio">Nenhuma nota inserida nesta semana</p>`;
+
+  // Breakdown por linha
+  const breakdown = calcLinhaBreakdown(notas, fat);
+  const linhaBreakdownHtml = breakdown.length > 1 ? `
+    <div class="cmv-linhas-breakdown">
+      <div class="cmv-linhas-title">Por linha de produto</div>
+      ${breakdown.map(b => `
+        <div class="cmv-linha-row">
+          <span class="cmv-linha-nome">${escHtml(b.linha)}</span>
+          <span class="cmv-linha-val">R$ ${fmt(b.total)}</span>
+          ${b.pct !== null ? `<span class="cmv-linha-pct">${b.pct.toFixed(1)}%</span>` : ''}
+        </div>`).join('')}
+    </div>` : '';
 
   panel.innerHTML = `
     <div class="cmv-panel-header">
@@ -2050,6 +2072,8 @@ function renderCMVPanel() {
       </div>
     `}
 
+    ${linhaBreakdownHtml}
+
     <div class="cmv-panel-notas-section">
       <div class="cmv-panel-notas-header">
         Notas Fiscais · ${notas.length} nota${notas.length !== 1 ? 's' : ''} · Total: R$ ${fmt(total)}
@@ -2080,6 +2104,127 @@ async function saveGeminiKey() {
 
 function closeGeminiKeyModal() {
   document.getElementById('invGeminiKeyOverlay').classList.remove('open');
+}
+
+// ── Linhas de Produto ─────────────────────────────────────────
+const DEFAULT_LINHAS = [
+  'Carnes Vermelhas', 'Frango', 'Pescados', 'Queijos e Laticínios',
+  'Hortifruti', 'Bebidas', 'Embalagens', 'Outros'
+];
+
+let linhasConfig = {
+  linhas:       [...DEFAULT_LINHAS],
+  fornecedores: {}   // { 'Nome Fornecedor': 'Linha' }
+};
+
+async function loadLinhas() {
+  if (!SUPABASE_CONFIGURED) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.config_linhas&select=estado`,
+      { headers: supabaseHeaders() }
+    );
+    const rows = await res.json();
+    if (rows?.[0]?.estado) linhasConfig = { ...linhasConfig, ...rows[0].estado };
+  } catch(e) {}
+}
+
+async function saveLinhas() {
+  if (!SUPABASE_CONFIGURED) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({ chave: 'config_linhas', estado: linhasConfig })
+  });
+}
+
+function populateLinhaSelect(selectId, fornecedor = '') {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = linhasConfig.linhas.map(l =>
+    `<option value="${escHtml(l)}">${escHtml(l)}</option>`
+  ).join('');
+  // Auto-fill se fornecedor conhecido
+  if (fornecedor) {
+    const known = linhasConfig.fornecedores[fornecedor.trim().toLowerCase()];
+    if (known) sel.value = known;
+  }
+}
+
+function autoFillLinha(selectId, fornecedor) {
+  const sel = document.getElementById(selectId);
+  if (!sel || !fornecedor) return;
+  const known = linhasConfig.fornecedores[fornecedor.trim().toLowerCase()];
+  if (known) sel.value = known;
+}
+
+function learnFornecedorLinha(fornecedor, linha) {
+  if (!fornecedor || !linha) return;
+  linhasConfig.fornecedores[fornecedor.trim().toLowerCase()] = linha;
+  saveLinhas();
+}
+
+function openLinhas() {
+  renderLinhasList();
+  document.getElementById('invLinhasOverlay').classList.add('open');
+}
+
+function closeLinhas() {
+  document.getElementById('invLinhasOverlay').classList.remove('open');
+}
+
+function renderLinhasList() {
+  const el = document.getElementById('linhasList');
+  if (!el) return;
+  el.innerHTML = linhasConfig.linhas.map((l, i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6">
+      <span style="font-size:14px;font-weight:500;color:#1e293b">${escHtml(l)}</span>
+      ${linhasConfig.linhas.length > 1 ? `<button onclick="removeLinha(${i})"
+        style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:2px 6px">✕</button>` : ''}
+    </div>`).join('');
+}
+
+function addLinha() {
+  const inp = document.getElementById('novaLinhaInput');
+  const val = inp.value.trim();
+  if (!val || linhasConfig.linhas.includes(val)) { inp.focus(); return; }
+  linhasConfig.linhas.push(val);
+  inp.value = '';
+  renderLinhasList();
+  saveLinhas();
+  refreshLinhaSelects();
+}
+
+function removeLinha(idx) {
+  linhasConfig.linhas.splice(idx, 1);
+  renderLinhasList();
+  saveLinhas();
+  refreshLinhaSelects();
+}
+
+function refreshLinhaSelects() {
+  ['nfRevLinha','notaLinha'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    populateLinhaSelect(id);
+    if (linhasConfig.linhas.includes(cur)) sel.value = cur;
+  });
+}
+
+// Breakdown de CMV por linha
+function calcLinhaBreakdown(notas, faturamento) {
+  const map = {};
+  for (const n of notas) {
+    const l = n.linha || 'Outros';
+    map[l] = (map[l] || 0) + (n.valor || 0);
+  }
+  return Object.entries(map)
+    .sort((a, b) => b[1] - a[1])
+    .map(([linha, total]) => ({
+      linha, total,
+      pct: faturamento > 0 ? (total / faturamento) * 100 : null
+    }));
 }
 
 // ── Trocar PIN ────────────────────────────────────────────────
