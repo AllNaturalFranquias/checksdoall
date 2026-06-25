@@ -38,6 +38,12 @@
     <nav class="inv-tabs" id="invTabs">
       <!-- tabs injected by JS -->
     </nav>
+    <div class="inv-search-bar">
+      <span class="inv-search-icon">🔍</span>
+      <input id="invSearch" type="text" placeholder="Pesquisar insumo..."
+        autocomplete="off" oninput="filterInventory(this.value)">
+      <button id="invSearchClear" onclick="clearInventorySearch()" style="display:none">✕</button>
+    </div>
   </header>
 
   <!-- Modal: Configurar CMV (admin, PIN protegido) -->
