@@ -458,10 +458,66 @@ let SECTIONS = BASE_SECTIONS.slice();
 // ── Estado ────────────────────────────────────────────────────
 let state = {
   semana: 1,
-  data: {},      // { HORTI: { semana_1: { 'Alface': { i: 5, e: 3, f: 2 } } } }
-  cotacoes: {},  // { q1: { HORTI: { 'Alface': 4.50 } }, q2: { ... } }
-  cmv: {}        // { semana_1: { faturamento: 100000, meta_pct: 30, notas: [] } }
+  mesAtual: null, // 'YYYY-MM' — mês do ciclo atual
+  data: {},       // { HORTI: { semana_1: { 'Alface': { i: 5, e: 3, f: 2 } } } }
+  cotacoes: {},   // { q1: { HORTI: { 'Alface': 4.50 } }, q2: { ... } }
+  cmv: {}         // { semana_1: { faturamento: 100000, meta_pct: 30, notas: [] } }
 };
+
+// ── Calendário de semanas ─────────────────────────────────────
+function mesAtualKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getCurrentWeek() {
+  return Math.min(Math.ceil(new Date().getDate() / 7), 4);
+}
+
+function getWeekRange(w) {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth();
+  const start = (w - 1) * 7 + 1;
+  const end   = w === 4 ? new Date(year, month + 1, 0).getDate() : w * 7;
+  const m     = String(month + 1).padStart(2, '0');
+  return `${String(start).padStart(2, '0')}–${String(end).padStart(2, '0')}/${m}`;
+}
+
+function getMesLabel() {
+  return new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+
+function checkMonthChange() {
+  const hoje = mesAtualKey();
+  if (!state.mesAtual) {
+    state.mesAtual = hoje;
+    return;
+  }
+  if (state.mesAtual === hoje) return;
+
+  // Novo mês detectado
+  const [ano, mes] = hoje.split('-');
+  const nomeMes = new Date(Number(ano), Number(mes) - 1, 1)
+    .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  if (confirm(`Novo mês detectado: ${nomeMes}.\n\nDeseja iniciar um novo ciclo? Os dados atuais serão arquivados e as semanas serão zeradas.\n\nClique em OK para iniciar ${nomeMes}.`)) {
+    // Arquiva dados do mês anterior no estado
+    state.historico = state.historico || {};
+    state.historico[state.mesAtual] = {
+      data:     state.data,
+      cmv:      state.cmv,
+      cotacoes: state.cotacoes,
+    };
+    // Zera para o novo mês
+    state.data     = {};
+    state.cmv      = {};
+    state.cotacoes = {};
+    state.semana   = getCurrentWeek();
+    state.mesAtual = hoje;
+    doSave();
+  }
+}
 
 // ── Helpers de cotação ────────────────────────────────────────
 // Semanas 1-2 = quinzena q1 | Semanas 3-4 = quinzena q2
@@ -512,6 +568,12 @@ async function init() {
 
   await loadUnitConfig();
   applyUnitConfig();
+
+  // Auto-seleciona semana atual pelo calendário
+  checkMonthChange();
+  if (!state.mesAtual || state.mesAtual === mesAtualKey()) {
+    state.semana = getCurrentWeek();
+  }
 
   buildTabs();
   buildSections();
@@ -908,8 +970,13 @@ function switchWeek(w) {
 
 function updateWeekButtons() {
   document.querySelectorAll('.inv-week-btn, .inv-week-bar-inner .inv-week-btn').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.week) === state.semana);
+    const w = parseInt(btn.dataset.week);
+    btn.classList.toggle('active', w === state.semana);
+    btn.innerHTML = `<span style="font-weight:700">Sem ${w}</span><br><span style="font-size:10px;opacity:.75">${getWeekRange(w)}</span>`;
   });
+  // Mostra mês no label se existir
+  const label = document.getElementById('invWeekLabel');
+  if (label) label.textContent = getMesLabel();
 }
 
 // ── PIN / Resumo ──────────────────────────────────────────────
