@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Estoque — Acesso</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="inventario.css">
+</head>
+<body class="login-body">
+
+  <div class="login-container">
+    <div class="login-logo">ESTOQUE <span>●</span></div>
+    <p class="login-subtitle">Selecione sua unidade</p>
+
+    <div class="login-units">
+      <button class="login-unit-btn" onclick="selectUnit('batel')">Batel</button>
+      <button class="login-unit-btn" onclick="selectUnit('maringa')">Maringá</button>
+      <button class="login-unit-btn" onclick="selectUnit('parkshopping')">Park Shopping</button>
+      <button class="login-unit-btn" onclick="selectUnit('bigorrilho')">Bigorrilho</button>
+      <button class="login-unit-btn login-unit-btn-cascavel" onclick="selectUnit('cascavel')">Cascavel <span class="login-em-breve">Em breve</span></button>
+    </div>
+
+    <button class="login-resumo-btn" onclick="selectUnit('global')">📊 Painel Geral — Dono</button>
+  </div>
+
+  <!-- PIN Modal -->
+  <div class="inv-overlay" id="pinOverlay">
+    <div class="inv-modal">
+      <h2 id="pinTitle">Acesso Admin</h2>
+      <p id="pinSubtitle">Digite o PIN para entrar como admin</p>
+      <input class="inv-pin-input" id="pinInput" type="password"
+             inputmode="numeric" maxlength="4" autocomplete="off"
+             onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="inv-modal-btn" onclick="doLogin()">Entrar como Admin</button>
+      <button class="inv-modal-cancel" id="skipBtn" onclick="goEmployee()">Entrar sem PIN (só contagem)</button>
+      <button class="inv-modal-cancel" onclick="cancelLogin()" style="color:#bbb;margin-top:4px">↩ Voltar</button>
+    </div>
+  </div>
+
+  <script>
+    // ── ATENÇÃO: mantenha estes PINs iguais aos do inventario.js ──
+    const UNIT_ADMINS = {
+      global:       [{ nome: 'Kauê',              pin: '1234' }],
+      batel:        [{ nome: 'Admin Batel 1',     pin: '1111' }, { nome: 'Admin Batel 2',     pin: '2222' }],
+      maringa:      [{ nome: 'Admin Maringá 1',   pin: '3333' }, { nome: 'Admin Maringá 2',   pin: '4444' }],
+      parkshopping: [{ nome: 'Admin Park 1',      pin: '5555' }, { nome: 'Admin Park 2',      pin: '6666' }],
+      bigorrilho:   [{ nome: 'Admin Bigo. 1',     pin: '7777' }, { nome: 'Admin Bigo. 2',     pin: '8888' }],
+      cascavel:     [{ nome: 'Admin Cascavel 1',  pin: '9999' }, { nome: 'Admin Cascavel 2',  pin: '0000' }],
+    };
+    const UNIT_LABELS = {
+      batel: 'Batel', maringa: 'Maringá', parkshopping: 'Park Shopping',
+      bigorrilho: 'Bigorrilho', cascavel: 'Cascavel', global: 'Painel Geral'
+    };
+
+    let selectedUnit = null;
+
+    function selectUnit(unit) {
+      selectedUnit = unit;
+      document.getElementById('pinTitle').textContent = UNIT_LABELS[unit] || unit;
+      document.getElementById('pinSubtitle').textContent = 'Digite o PIN para entrar como admin';
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinInput').classList.remove('error');
+      document.getElementById('skipBtn').style.display = unit === 'global' ? 'none' : 'block';
+      document.getElementById('pinOverlay').classList.add('open');
+      setTimeout(() => document.getElementById('pinInput').focus(), 100);
+    }
+
+    function doLogin() {
+      const pin    = document.getElementById('pinInput').value;
+      const admins = UNIT_ADMINS[selectedUnit] || [];
+      const admin  = admins.find(a => a.pin === pin);
+
+      if (admin) {
+        const isGlobal = selectedUnit === 'global';
+        sessionStorage.setItem('inv_session', JSON.stringify({
+          nome:    admin.nome,
+          unidade: isGlobal ? null : selectedUnit,
+          isAdmin: true,
+          isGlobal
+        }));
+        window.location.href = isGlobal ? 'resumo.html' : 'inventario.html?u=' + selectedUnit;
+      } else {
+        const inp = document.getElementById('pinInput');
+        inp.classList.add('error');
+        inp.value = '';
+        setTimeout(() => inp.classList.remove('error'), 400);
+      }
+    }
+
+    function goEmployee() {
+      sessionStorage.removeItem('inv_session');
+      window.location.href = 'inventario.html?u=' + selectedUnit;
+    }
+
+    function cancelLogin() {
+      document.getElementById('pinOverlay').classList.remove('open');
+      selectedUnit = null;
+    }
+  </script>
+</body>
+</html>
