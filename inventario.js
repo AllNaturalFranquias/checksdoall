@@ -1758,7 +1758,7 @@ Se não conseguir ler algum campo, use null. Retorne APENAS o JSON, sem texto ad
     generationConfig: { temperature: 0.1 }
   });
 
-  const BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
+  const BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
   // Tenta 3 formas de autenticação em sequência
   let resp = await fetch(BASE,
@@ -2252,7 +2252,7 @@ async function testGeminiKey() {
   btn.textContent = '⏳ Testando...';
   btn.disabled = true;
 
-  const BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
+  const BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
   const body = JSON.stringify({ contents:[{ parts:[{ text:'Responda apenas: OK' }] }] });
 
   let resp, label;
