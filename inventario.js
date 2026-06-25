@@ -48,13 +48,13 @@ try { _session = JSON.parse(sessionStorage.getItem('inv_session') || 'null'); } 
 const IS_ADMIN = Boolean(_session && _session.isAdmin && (_session.unidade === UNIT_ID || _session.isGlobal));
 
 // ── PINs de admin por unidade ─────────────────────────────────
-const UNIT_ADMINS = {
-  global:       [{ nome: 'Kauê',              pin: '1234' }],
-  batel:        [{ nome: 'Admin Batel 1',     pin: '1111' }, { nome: 'Admin Batel 2',     pin: '2222' }],
-  maringa:      [{ nome: 'Admin Maringá 1',   pin: '3333' }, { nome: 'Admin Maringá 2',   pin: '4444' }],
-  parkshopping: [{ nome: 'Admin Park 1',      pin: '5555' }, { nome: 'Admin Park 2',      pin: '6666' }],
-  bigorrilho:   [{ nome: 'Admin Bigo. 1',     pin: '7777' }, { nome: 'Admin Bigo. 2',     pin: '8888' }],
-  cascavel:     [{ nome: 'Admin Cascavel 1',  pin: '9999' }, { nome: 'Admin Cascavel 2',  pin: '0000' }],
+let UNIT_ADMINS = {
+  global:       [{ nome: 'Kauê',    pin: '1234' }],
+  batel:        [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+  maringa:      [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+  parkshopping: [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+  bigorrilho:   [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+  cascavel:     [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
 };
 
 // ── Config de unidade (itens customizados) ────────────────────
@@ -508,7 +508,7 @@ async function init() {
 
   loadState();
   updateCloudStatus('sync');
-  await loadGeminiKey();
+  await Promise.all([loadGeminiKey(), loadPins()]);
 
   await loadUnitConfig();
   applyUnitConfig();
@@ -1563,6 +1563,18 @@ function logout() {
 // ── Leitura de NF por foto (Gemini Vision) ────────────────────
 let mapeamentos     = {};
 let nfExtractedItems = [];
+
+async function loadPins() {
+  if (!SUPABASE_CONFIGURED) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.config_pins&select=estado`,
+      { headers: supabaseHeaders() }
+    );
+    const rows = await res.json();
+    if (rows?.[0]?.estado) Object.assign(UNIT_ADMINS, rows[0].estado);
+  } catch(e) {}
+}
 
 async function loadMapeamentos() {
   if (!SUPABASE_CONFIGURED) return;
