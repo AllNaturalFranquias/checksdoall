@@ -1992,6 +1992,9 @@ function changeNFMatch(id, value) {
 }
 
 function openAddItemFromNF(itemId, desc) {
+  const overlay = document.getElementById('invNFAddItemOverlay');
+  if (!overlay) { showToast('Atualize a página (F5) e tente novamente'); return; }
+
   const sectionEl = document.getElementById('nfAddItemSection');
   const groupEl   = document.getElementById('nfAddItemGroup');
   const nameEl    = document.getElementById('nfAddItemName');
