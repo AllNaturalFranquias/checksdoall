@@ -1263,6 +1263,24 @@ body {
 }
 .nf-item-select:focus { outline: none; border-color: var(--red); }
 
+.nf-cadastrar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 12px;
+  background: #f0fdf4;
+  border: 1.5px dashed #86efac;
+  border-radius: 8px;
+  color: #16a34a;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+}
+.nf-cadastrar-btn:active { background: #dcfce7; }
+
 .nf-total {
   font-size: 14px;
   color: var(--muted);
