@@ -1917,7 +1917,8 @@ function renderCMVPanel() {
         📷 Foto NF${geminiOk ? '' : ' ⚠'}
       </button>
       ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openCMVConfig()">⚙ CMV</button>` : ''}
-      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openGeminiKeyModal()" title="Configurar chave Gemini">🔑</button>` : ''}
+      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openGeminiKeyModal()" title="Configurar chave Gemini">🔑 IA</button>` : ''}
+      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openTrocarPin()" title="Trocar meu PIN">👤 PIN</button>` : ''}
     </div>`;
 
   const notasHtml = notas.length
@@ -2002,6 +2003,57 @@ async function saveGeminiKey() {
 
 function closeGeminiKeyModal() {
   document.getElementById('invGeminiKeyOverlay').classList.remove('open');
+}
+
+// ── Trocar PIN ────────────────────────────────────────────────
+function openTrocarPin() {
+  const session = JSON.parse(sessionStorage.getItem('inv_session') || '{}');
+  document.getElementById('tpNome').value = session.nome || '';
+  document.getElementById('tpPin1').value = '';
+  document.getElementById('tpPin2').value = '';
+  document.getElementById('tpError').textContent = '';
+  document.getElementById('tpError').style.color = '#e11d48';
+  document.getElementById('invTrocarPinOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('tpNome').focus(), 100);
+}
+
+function closeTrocarPin() {
+  document.getElementById('invTrocarPinOverlay').classList.remove('open');
+}
+
+async function saveTrocarPin() {
+  const nome = document.getElementById('tpNome').value.trim();
+  const p1   = document.getElementById('tpPin1').value;
+  const p2   = document.getElementById('tpPin2').value;
+  const err  = document.getElementById('tpError');
+
+  if (!nome)              { err.textContent = 'Digite seu nome'; return; }
+  if (p1.length < 4)     { err.textContent = 'PIN deve ter 4 dígitos'; return; }
+  if (p1 !== p2)         { err.textContent = 'Os PINs não coincidem'; return; }
+  if (!/^\d{4}$/.test(p1)) { err.textContent = 'Use apenas números'; return; }
+
+  const session = JSON.parse(sessionStorage.getItem('inv_session') || '{}');
+  const unit    = session.unidade || 'global';
+  const admins  = UNIT_ADMINS[unit] || [];
+  const idx     = admins.findIndex(a => a.nome === session.nome);
+  if (idx !== -1) { admins[idx].pin = p1; admins[idx].nome = nome; }
+
+  // Salva PINs no Supabase
+  if (SUPABASE_CONFIGURED) {
+    const body = JSON.stringify({ chave: 'config_pins', estado: UNIT_ADMINS });
+    await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), Prefer: 'resolution=merge-duplicates' },
+      body
+    });
+  }
+
+  session.nome = nome;
+  sessionStorage.setItem('inv_session', JSON.stringify(session));
+
+  err.style.color = '#16a34a';
+  err.textContent = `PIN salvo! Bem-vinda, ${nome} ✓`;
+  setTimeout(closeTrocarPin, 1500);
 }
 
 // ── Start ─────────────────────────────────────────────────────
