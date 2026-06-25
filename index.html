@@ -14,6 +14,10 @@
     <div class="login-logo">CONTROLES <span>●</span> ALL</div>
     <p class="login-subtitle">Selecione sua unidade</p>
 
+    <div class="login-notice">
+      🔑 No primeiro acesso, você deverá criar seu nome e PIN pessoal antes de entrar.
+    </div>
+
     <div class="login-units">
       <button class="login-unit-btn" onclick="selectUnit('batel')">Batel</button>
       <button class="login-unit-btn" onclick="selectUnit('maringa')">Maringá</button>
@@ -27,6 +31,8 @@
 
   <!-- Modal: Login com PIN -->
   <div class="inv-overlay" id="pinOverlay">
+
+    <!-- Passo 1: digitar PIN atual -->
     <div class="inv-modal" id="pinModalContent">
       <h2 id="pinTitle">Acesso</h2>
       <p id="pinSubtitle">Digite seu PIN para entrar</p>
@@ -34,20 +40,13 @@
              inputmode="numeric" maxlength="4" autocomplete="off"
              onkeydown="if(event.key==='Enter')doLogin()">
       <button class="inv-modal-btn" onclick="doLogin()">Entrar</button>
-      <button class="inv-modal-cancel" onclick="cancelLogin()" style="color:#bbb;margin-top:4px">↩ Voltar</button>
+      <button class="inv-modal-cancel" onclick="cancelLogin()">↩ Voltar</button>
     </div>
 
-    <!-- Pós-login: opção de trocar PIN -->
-    <div class="inv-modal" id="postLoginContent" style="display:none">
-      <h2 id="postLoginTitle">Bem-vindo!</h2>
-      <button class="inv-modal-btn" id="btnContinue" onclick="doRedirect()">Entrar no sistema</button>
-      <button class="inv-modal-cancel" onclick="showChangePIN()" style="margin-top:8px">🔑 Trocar meu PIN</button>
-    </div>
-
-    <!-- Trocar PIN -->
+    <!-- Passo 2: criar nome e PIN pessoal (obrigatório se PIN ainda é padrão) -->
     <div class="inv-modal" id="changePinContent" style="display:none">
-      <h2>Personalizar acesso</h2>
-      <p style="font-size:13px;color:#666;margin-bottom:16px">Defina seu nome e PIN pessoal</p>
+      <h2 id="changePinTitle">Criar acesso pessoal</h2>
+      <p id="changePinSubtitle" style="font-size:13px;color:#666;margin-bottom:16px"></p>
       <div class="nota-field">
         <label>Seu nome</label>
         <input id="newNome" type="text" placeholder="Ex: Bruna" autocomplete="off"
@@ -64,23 +63,25 @@
                onkeydown="if(event.key==='Enter')saveNewPin()">
       </div>
       <p id="pinChangeError" style="color:#e11d48;font-size:12px;min-height:18px;margin-top:6px"></p>
-      <button class="inv-modal-btn" onclick="saveNewPin()">Salvar</button>
-      <button class="inv-modal-cancel" onclick="doRedirect()">Agora não</button>
+      <button class="inv-modal-btn" onclick="saveNewPin()">Salvar e Entrar</button>
+      <button class="inv-modal-cancel" id="btnSkipPin" onclick="doRedirect()" style="display:none">Agora não</button>
     </div>
+
   </div>
 
   <script>
     const SUPABASE_URL = 'https://nhuotdwfzowydrjeyttc.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5odW90ZHdmem93eWRyamV5dHRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTM2NDAsImV4cCI6MjA5NTk4OTY0MH0.JovSWvkJ5OdX1tauz7sYOuyDIm1Mbcx5gJF8Zb20oe4';
 
-    // PINs padrão — carregados/substituídos pelo Supabase
+    const DEFAULT_PINS = ['1111','2222','1234'];
+
     let UNIT_ADMINS = {
-      global:       [{ nome: 'Kauê',       pin: '1234' }],
-      batel:        [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
-      maringa:      [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
-      parkshopping: [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
-      bigorrilho:   [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
-      cascavel:     [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      global:       [{ nome: 'Kauê',    pin: '1234' }],
+      batel:        [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      maringa:      [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      parkshopping: [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      bigorrilho:   [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      cascavel:     [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
     };
     const UNIT_LABELS = {
       batel:'Batel', maringa:'Maringá', parkshopping:'Park Shopping',
@@ -90,7 +91,6 @@
     let selectedUnit = null;
     let loggedAdmin  = null;
 
-    // Carrega PINs do Supabase
     async function loadPins() {
       try {
         const r = await fetch(
@@ -139,8 +139,29 @@
           nome: admin.nome, unidade: isGlobal ? null : selectedUnit,
           isAdmin: true, isGlobal
         }));
-        document.getElementById('postLoginTitle').textContent = `Olá, ${admin.nome}!`;
-        showModal('postLoginContent');
+
+        const isPinDefault = DEFAULT_PINS.includes(admin.pin);
+        if (isPinDefault) {
+          // PIN padrão: troca obrigatória
+          document.getElementById('changePinTitle').textContent = 'Criar acesso pessoal';
+          document.getElementById('changePinSubtitle').textContent =
+            'Antes de entrar, defina seu nome e escolha um PIN pessoal. Isso é obrigatório.';
+          document.getElementById('btnSkipPin').style.display = 'none';
+        } else {
+          // PIN já personalizado: troca opcional
+          document.getElementById('changePinTitle').textContent = `Olá, ${admin.nome}!`;
+          document.getElementById('changePinSubtitle').textContent =
+            'Deseja atualizar seu nome ou PIN? Ou clique em "Agora não" para entrar direto.';
+          document.getElementById('btnSkipPin').style.display = 'block';
+        }
+
+        document.getElementById('newNome').value = isPinDefault ? '' : admin.nome;
+        document.getElementById('newPin1').value = '';
+        document.getElementById('newPin2').value = '';
+        document.getElementById('pinChangeError').textContent = '';
+        document.getElementById('pinChangeError').style.color = '#e11d48';
+        showModal('changePinContent');
+        setTimeout(() => document.getElementById('newNome').focus(), 100);
       } else {
         const inp = document.getElementById('pinInput');
         inp.classList.add('error');
@@ -154,39 +175,30 @@
       window.location.href = isGlobal ? 'resumo.html' : 'inventario.html?u=' + selectedUnit;
     }
 
-    function showChangePIN() {
-      document.getElementById('newPin1').value = '';
-      document.getElementById('newPin2').value = '';
-      document.getElementById('pinChangeError').textContent = '';
-      showModal('changePinContent');
-      setTimeout(() => document.getElementById('newPin1').focus(), 100);
-    }
-
     async function saveNewPin() {
       const nome = document.getElementById('newNome').value.trim();
       const p1   = document.getElementById('newPin1').value;
       const p2   = document.getElementById('newPin2').value;
       const err  = document.getElementById('pinChangeError');
 
-      if (!nome)   { err.textContent = 'Digite seu nome'; return; }
-      if (p1.length < 4) { err.textContent = 'PIN deve ter 4 dígitos'; return; }
-      if (p1 !== p2)     { err.textContent = 'Os PINs não coincidem'; return; }
+      if (!nome)                { err.textContent = 'Digite seu nome'; return; }
+      if (p1.length < 4)       { err.textContent = 'PIN deve ter 4 dígitos'; return; }
+      if (p1 !== p2)           { err.textContent = 'Os PINs não coincidem'; return; }
       if (!/^\d{4}$/.test(p1)) { err.textContent = 'Use apenas números'; return; }
+      if (DEFAULT_PINS.includes(p1)) { err.textContent = 'Escolha um PIN diferente do padrão'; return; }
 
-      // Atualiza nome e PIN do admin logado
       const admins = UNIT_ADMINS[selectedUnit] || [];
       const idx = admins.findIndex(a => a.nome === loggedAdmin.nome);
       if (idx !== -1) { admins[idx].pin = p1; admins[idx].nome = nome; }
 
-      // Atualiza sessão com novo nome
       const session = JSON.parse(sessionStorage.getItem('inv_session') || '{}');
       session.nome = nome;
       sessionStorage.setItem('inv_session', JSON.stringify(session));
 
       await savePins();
       err.style.color = '#16a34a';
-      err.textContent = `Olá, ${nome}! PIN salvo ✓`;
-      setTimeout(doRedirect, 1200);
+      err.textContent = `Tudo certo, ${nome}! Entrando...`;
+      setTimeout(doRedirect, 1000);
     }
 
     function cancelLogin() {
@@ -196,10 +208,24 @@
     }
 
     function showModal(id) {
-      ['pinModalContent','postLoginContent','changePinContent'].forEach(m => {
+      ['pinModalContent','changePinContent'].forEach(m => {
         document.getElementById(m).style.display = m === id ? 'block' : 'none';
       });
     }
   </script>
+
+  <style>
+    .login-notice {
+      background: #fef9c3;
+      border: 1px solid #fde047;
+      color: #713f12;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 18px;
+      text-align: center;
+    }
+  </style>
 </body>
 </html>
