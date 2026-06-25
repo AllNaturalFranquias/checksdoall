@@ -1758,18 +1758,31 @@ Se não conseguir ler algum campo, use null. Retorne APENAS o JSON, sem texto ad
     generationConfig: { temperature: 0.1 }
   });
 
-  const BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
+  const MODELS = [
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-preview-05-20',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-latest',
+  ];
+  const ROOT = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
-  // Tenta 3 formas de autenticação em sequência
-  let resp = await fetch(BASE,
-    { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: reqBody });
-  if (resp.status === 401) {
-    resp = await fetch(`${BASE}?key=${encodeURIComponent(key)}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: reqBody });
-  }
-  if (resp.status === 401) {
+  // Tenta cada modelo até um responder (não 404)
+  let resp, BASE;
+  for (const model of MODELS) {
+    BASE = `${ROOT}${model}:generateContent`;
     resp = await fetch(BASE,
-      { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` }, body: reqBody });
+      { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: reqBody });
+    if (resp.status === 401) {
+      resp = await fetch(`${BASE}?key=${encodeURIComponent(key)}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: reqBody });
+    }
+    if (resp.status === 401) {
+      resp = await fetch(BASE,
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` }, body: reqBody });
+    }
+    if (resp.status !== 404) break; // modelo encontrado (pode ser 200, 503, 429, etc.)
+    setNFLoadingMsg(`Modelo ${model} indisponível, tentando próximo...`);
   }
 
   if (!resp.ok) {
