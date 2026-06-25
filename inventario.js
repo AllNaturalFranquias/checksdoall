@@ -1,0 +1,1939 @@
+'use strict';
+
+// ── Configuração Supabase ─────────────────────────────────────
+// Cole aqui as credenciais do seu projeto Supabase
+const SUPABASE_URL = 'https://nhuotdwfzowydrjeyttc.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5odW90ZHdmem93eWRyamV5dHRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTM2NDAsImV4cCI6MjA5NTk4OTY0MH0.JovSWvkJ5OdX1tauz7sYOuyDIm1Mbcx5gJF8Zb20oe4';
+const SUPABASE_CONFIGURED = !SUPABASE_URL.includes('COLE');
+
+// ── Gemini (leitura de NF por foto) ──────────────────────────
+const GEMINI_KEY = 'AQ.Ab8RN6Le-ikrXwQjRzgLzf5MjqpEqHUK9P5hwuAJBRjORSBQUA';
+
+// ── Unidade (via URL ?u=batel) ────────────────────────────────
+const UNIT_ID    = new URLSearchParams(location.search).get('u') || 'batel';
+const UNIT_NAMES = { batel:'Batel', maringa:'Maringá', parkshopping:'Park Shopping', bigorrilho:'Bigorrilho', cascavel:'Cascavel' };
+const UNIT_NAME  = UNIT_NAMES[UNIT_ID] || UNIT_ID;
+const LOCAL_KEY  = 'inventario_' + UNIT_ID + '_v1';
+const CLOUD_DADOS = 'dados_' + UNIT_ID;
+const CLOUD_CFG   = 'config_' + UNIT_ID;
+
+// ── Sessão de admin (setada pelo login) ───────────────────────
+let _session = null;
+try { _session = JSON.parse(sessionStorage.getItem('inv_session') || 'null'); } catch(e) {}
+const IS_ADMIN = Boolean(_session && _session.isAdmin && (_session.unidade === UNIT_ID || _session.isGlobal));
+
+// ── PINs de admin por unidade ─────────────────────────────────
+const UNIT_ADMINS = {
+  global:       [{ nome: 'Kauê',              pin: '1234' }],
+  batel:        [{ nome: 'Admin Batel 1',     pin: '1111' }, { nome: 'Admin Batel 2',     pin: '2222' }],
+  maringa:      [{ nome: 'Admin Maringá 1',   pin: '3333' }, { nome: 'Admin Maringá 2',   pin: '4444' }],
+  parkshopping: [{ nome: 'Admin Park 1',      pin: '5555' }, { nome: 'Admin Park 2',      pin: '6666' }],
+  bigorrilho:   [{ nome: 'Admin Bigo. 1',     pin: '7777' }, { nome: 'Admin Bigo. 2',     pin: '8888' }],
+  cascavel:     [{ nome: 'Admin Cascavel 1',  pin: '9999' }, { nome: 'Admin Cascavel 2',  pin: '0000' }],
+};
+
+// ── Config de unidade (itens customizados) ────────────────────
+let editMode           = false;
+let unitConfig         = { added: {}, deleted: {} };
+let currentEditSection = null;
+
+// ── Dados de estoque (base — igual para todas as unidades) ────
+const BASE_SECTIONS = [
+  {
+    key: 'HORTI',
+    label: 'HORTI',
+    groups: [
+      {
+        group: 'Verduranet',
+        items: [
+          { name: 'Abobrinha Espaguete', unit: 'un' },
+          { name: 'Alface Americana', unit: 'un' },
+          { name: 'Cenoura Espaguete', unit: 'un' },
+          { name: 'Cenoura Ralada', unit: 'un' },
+          { name: 'Escarola', unit: 'un' },
+          { name: 'Mix de Folhas', unit: 'un' },
+          { name: 'Pupunha Espaguete', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Ceasa',
+        items: [
+          { name: 'Abacate', unit: 'un' },
+          { name: 'Abóbora Cabotia', unit: 'un' },
+          { name: 'Abobrinha', unit: 'un' },
+          { name: 'Alho Sem Casca', unit: 'un' },
+          { name: 'Batata Branca Inglesa', unit: 'un' },
+          { name: 'Batata Doce', unit: 'cx' },
+          { name: 'Cebola Branca', unit: 'un' },
+          { name: 'Cebola Roxa', unit: 'un' },
+          { name: 'Cebolinha', unit: 'maço' },
+          { name: 'Cenoura Inteira', unit: 'un' },
+          { name: 'Couve', unit: 'maço' },
+          { name: 'Couve-Flor', unit: 'un' },
+          { name: 'Espinafre', unit: 'maço' },
+          { name: 'Limão', unit: 'un' },
+          { name: 'Maçã Fuji para Geleia', unit: 'un' },
+          { name: 'Manga', unit: 'un' },
+          { name: 'Mandioca Descascada', unit: 'kg' },
+          { name: 'Manjericão', unit: 'maço' },
+          { name: 'Morango', unit: 'cx' },
+          { name: 'Ovo', unit: 'dz' },
+          { name: 'Pepino Japonês', unit: 'un' },
+          { name: 'Pimenta Dedo de Moça', unit: 'un' },
+          { name: 'Repolho Roxo', unit: 'un' },
+          { name: 'Repolho Branco', unit: 'un' },
+          { name: 'Salsinha', unit: 'maço' },
+          { name: 'Tomate Cereja', unit: 'cx' },
+          { name: 'Tomate Italiano', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Bebidas',
+        items: [
+          { name: 'Água com Gás', unit: 'un' },
+          { name: 'Água Sem Gás', unit: 'un' },
+          { name: 'Cerveja', unit: 'un' },
+          { name: 'Chá de Hibisco', unit: 'un' },
+          { name: 'Chá Mate', unit: 'un' },
+          { name: 'Coca Zero', unit: 'un' },
+          { name: 'Kombucha Maracujá c/ Gengibre', unit: 'un' },
+          { name: 'Kombucha Açaí c/ Cravo', unit: 'un' },
+          { name: 'Kombucha Guaraná c/ Laranja', unit: 'un' },
+          { name: 'Kombucha Berry c/ Hibisco', unit: 'un' },
+          { name: 'Suco de Laranja', unit: 'un' },
+          { name: 'Suco Detox', unit: 'un' },
+          { name: 'Suco Refrescante', unit: 'un' },
+          { name: 'Suco Thermofresh', unit: 'un' },
+          { name: 'Vinho Branco', unit: 'un' },
+          { name: 'Vinho Rosé', unit: 'un' },
+          { name: 'Vinho Tinto', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Sobremesas',
+        items: [
+          { name: 'Strogonozes', unit: 'un' },
+          { name: 'Brownie', unit: 'un' },
+          { name: 'Mousse Chocolate com Pasta', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Snacks',
+        items: [
+          { name: 'Coxinha', unit: 'un' },
+          { name: 'Palitinhos de Tapioca', unit: 'un' },
+          { name: 'Sanduíche Natural', unit: 'un' },
+          { name: 'Tortinha Frango e Legumes', unit: 'un' },
+          { name: 'Tortinha Legumes', unit: 'un' },
+        ]
+      }
+    ]
+  },
+  {
+    key: 'COZINHA',
+    label: 'COZINHA',
+    groups: [
+      {
+        group: 'Secos',
+        items: [
+          { name: 'Açúcar Demerara', unit: 'un' },
+          { name: 'Adoçante Zero Cal', unit: 'un' },
+          { name: 'Arroz Integral', unit: 'un' },
+          { name: 'Azeite de Oliva Misto (Cozinha)', unit: 'un' },
+          { name: 'Azeite de Oliva Puro (Cliente)', unit: 'un' },
+          { name: 'Bifummm', unit: 'un' },
+          { name: 'Café', unit: 'un' },
+          { name: 'Conhaque', unit: 'un' },
+          { name: 'Creme de Leite 0 Lactose', unit: 'un' },
+          { name: 'Extrato de Tomate', unit: 'un' },
+          { name: 'Farelo de Aveia', unit: 'un' },
+          { name: 'Farinha de Mandioca', unit: 'un' },
+          { name: 'Farinha de Trigo', unit: 'un' },
+          { name: 'Feijão Preto', unit: 'un' },
+          { name: 'Leite de Coco', unit: 'un' },
+          { name: 'Macarrão Fusilli', unit: 'un' },
+          { name: 'Maionese Hellmans', unit: 'un' },
+          { name: 'Maisena (Amido de Milho)', unit: 'un' },
+          { name: 'Mel', unit: 'un' },
+          { name: 'Milho Verde Conserva', unit: 'un' },
+          { name: 'Molho Inglês', unit: 'un' },
+          { name: 'Mostarda Amarela', unit: 'un' },
+          { name: 'Óleo de Algodão', unit: 'lt' },
+          { name: 'Pepino Conserva (Picles)', unit: 'un' },
+          { name: 'Pimenta Clientes', unit: 'un' },
+          { name: 'Pimenta do Reino', unit: 'un' },
+          { name: 'Pupunha Laminada (Lasanha)', unit: 'un' },
+          { name: 'Sal', unit: 'un' },
+          { name: 'Shoyu Light', unit: 'un' },
+          { name: 'Tapioca Granulada', unit: 'un' },
+          { name: 'Tomate Pelado', unit: 'un' },
+          { name: 'Tomate Seco', unit: 'un' },
+          { name: 'Tortilha de Wrap', unit: 'un' },
+          { name: 'Vinagre Balsâmico', unit: 'un' },
+          { name: 'Vinagre de Vinho Tinto', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Grãos e Sementes',
+        items: [
+          { name: 'Amêndoas Laminadas', unit: 'un' },
+          { name: 'Chia', unit: 'un' },
+          { name: 'Edamame', unit: 'un' },
+          { name: 'Ervas Finas', unit: 'un' },
+          { name: 'Farinha de Linhaça', unit: 'un' },
+          { name: 'Lemon Pepper', unit: 'un' },
+          { name: 'Louro', unit: 'un' },
+          { name: 'Mix Gergelim', unit: 'un' },
+          { name: 'Nozes', unit: 'un' },
+          { name: 'Orégano', unit: 'un' },
+          { name: 'Páprica Defumada', unit: 'un' },
+          { name: 'Pimenta Preta em Pó', unit: 'un' },
+          { name: 'Semente de Girassol', unit: 'un' },
+          { name: 'Semente de Linhaça', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Laticínios',
+        items: [
+          { name: 'Iogurte Natural', unit: 'un' },
+          { name: 'Leite Desnatado', unit: 'lt' },
+          { name: 'Manteiga Sem Sal', unit: 'un' },
+          { name: 'Muçarela Búfala', unit: 'un' },
+          { name: 'Queijo Muçarela', unit: 'un' },
+          { name: 'Queijo Parmesão', unit: 'un' },
+          { name: 'Requeijão Light', unit: 'un' },
+          { name: 'Ricota (Lasanha)', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Proteínas',
+        items: [
+          { name: 'Bacon Cubos', unit: 'kg' },
+          { name: 'Bacon Manta Feijoada', unit: 'kg' },
+          { name: 'Calabresa', unit: 'kg' },
+          { name: 'Carne Moída', unit: 'kg' },
+          { name: 'Cogumelos', unit: 'kg' },
+          { name: 'Costelinha', unit: 'kg' },
+          { name: 'Mignon Cubos', unit: 'kg' },
+          { name: 'Mignon Tiras', unit: 'kg' },
+          { name: 'Peito de Frango', unit: 'kg' },
+          { name: 'Peito de Peru', unit: 'kg' },
+          { name: 'Posta Branca', unit: 'kg' },
+          { name: 'Presunto Parma', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Pães',
+        items: [
+          { name: 'Pão Integral Charlotte', unit: 'un' },
+        ]
+      }
+    ]
+  },
+  {
+    key: 'PRODUCAO',
+    label: 'PRODUÇÃO',
+    groups: [
+      {
+        group: 'Itens Produzidos',
+        items: [
+          { name: 'Abobrinha do Balcão de Saladas', unit: 'un' },
+          { name: 'Arroz Integral Cozido', unit: 'un' },
+          { name: 'Bacon ao Forno', unit: 'un' },
+          { name: 'Base Creme Abóbora (porções 0,350g)', unit: 'porção' },
+          { name: 'Base Creme Mandioca (porções 0,350g)', unit: 'porção' },
+          { name: 'Batata Chips - Frita', unit: 'un' },
+          { name: 'Batata Palha - Frita', unit: 'un' },
+          { name: 'Cebolinha Picada', unit: 'un' },
+          { name: 'Cogumelos Fatiados', unit: 'un' },
+          { name: 'Cogumelos Grelhados', unit: 'un' },
+          { name: 'Couve Branqueada Wrap', unit: 'un' },
+          { name: 'Couve Flor Triturada/Porcionada', unit: 'porção' },
+          { name: 'Couve Refogada Feijoada', unit: 'un' },
+          { name: 'Coxinha Massa', unit: 'un' },
+          { name: 'Croutons', unit: 'un' },
+          { name: 'Farofa Brasileirinho (porções 0,030g)', unit: 'porção' },
+          { name: 'Farofa de Cebola Feijoada', unit: 'un' },
+          { name: 'Feijão Temperado', unit: 'un' },
+          { name: 'Feijoadinha', unit: 'un' },
+          { name: 'Frango Desfiado', unit: 'un' },
+          { name: 'Frango Desfiado Porcionado 30g', unit: 'porção' },
+          { name: 'Frango em Cubos (Puxado)', unit: 'un' },
+          { name: 'Frango Cru em Cubos', unit: 'un' },
+          { name: 'Geléia de Pimenta (porções 0,030g)', unit: 'porção' },
+          { name: 'Guacamole', unit: 'un' },
+          { name: 'Lasanha Bolonhesa', unit: 'un' },
+          { name: 'Lasanha Vegetariana', unit: 'un' },
+          { name: 'Legumes Brasileirinho Fatiados', unit: 'un' },
+          { name: 'Legumes Brasileirinho Grelhados', unit: 'un' },
+          { name: 'Mignon em Cubos 120g', unit: 'porção' },
+          { name: 'Mignon em Cubos 90g', unit: 'porção' },
+          { name: 'Mix de Sementes e Amêndoas', unit: 'un' },
+          { name: 'Mix de Spaghetti', unit: 'un' },
+          { name: 'Molho Balsâmico Mostarda e Mel', unit: 'un' },
+          { name: 'Molho Golf', unit: 'un' },
+          { name: 'Molho Mostarda e Mel', unit: 'un' },
+          { name: 'Molho Pesto', unit: 'un' },
+          { name: 'Molho Pomodoro', unit: 'un' },
+          { name: 'Molho Ranch', unit: 'un' },
+          { name: 'Palitinho de Tapioca (6un / 0,025g)', unit: 'porção' },
+          { name: 'Patê Pronto Sanduíche Natural', unit: 'un' },
+          { name: 'Parmegiana Congelado Pré-Assado', unit: 'un' },
+          { name: 'Parmegiana Pré-Assado', unit: 'un' },
+          { name: 'Posta Desfiada Porcionada 0,030g', unit: 'porção' },
+          { name: 'Pupunha Branqueada p/ Saladas (0,020g)', unit: 'porção' },
+          { name: 'Queijo Parmesão Ralado (0,020g)', unit: 'porção' },
+          { name: 'Salada Colorida Strogonoff Delivery', unit: 'un' },
+          { name: 'Strogonoff de Frango Pré-Pronto (0,170g)', unit: 'porção' },
+          { name: 'Strogonoff de Mignon Pré-Pronto (0,170g)', unit: 'porção' },
+          { name: 'Tempero All', unit: 'un' },
+          { name: 'Tilápia na Farinha para Congelar', unit: 'un' },
+          { name: 'Tortilla Crocante e Picada', unit: 'un' },
+          { name: 'Tortinha Frango c/ Legumes Congelada', unit: 'un' },
+          { name: 'Tortinha Legumes Congelada', unit: 'un' },
+          { name: 'Vinagrete', unit: 'un' },
+        ]
+      }
+    ]
+  },
+  {
+    key: 'DESCARTAVEIS',
+    label: 'DESCART.',
+    groups: [
+      {
+        group: 'Descartáveis e Embalagens',
+        items: [
+          { name: 'Adesivo Cenoura', unit: 'un' },
+          { name: 'Bobina de Impressora Térmica', unit: 'un' },
+          { name: 'Bobina de Seladora', unit: 'un' },
+          { name: 'Bobina Máquina de Cartão', unit: 'un' },
+          { name: 'Bobina Plástica Grande 7kg', unit: 'un' },
+          { name: 'Bobina Plástica Média 5kg', unit: 'un' },
+          { name: 'Bobina Plástica Pequena 2kg', unit: 'un' },
+          { name: 'Canudos de Papel', unit: 'un' },
+          { name: 'Cartão Fidelidade', unit: 'un' },
+          { name: 'Colher Descartável', unit: 'pct' },
+          { name: 'Copo Papel Descartável', unit: 'un' },
+          { name: 'Durex', unit: 'un' },
+          { name: 'Embalagem 3 Divisórias', unit: 'un' },
+          { name: 'Embalagem Retangular', unit: 'un' },
+          { name: 'Etiqueta Validade', unit: 'rolo' },
+          { name: 'Flyer Cardápio', unit: 'un' },
+          { name: 'Folha Enrolar Wrap', unit: 'un' },
+          { name: 'Grampo Grampeador', unit: 'cx' },
+          { name: 'Guardanapos', unit: 'pct' },
+          { name: 'Lacre de Delivery', unit: 'un' },
+          { name: 'Limpa Alumínio', unit: 'un' },
+          { name: 'Limpa Forno', unit: 'un' },
+          { name: 'Palito de Dente', unit: 'cx' },
+          { name: 'Pano de Chão', unit: 'un' },
+          { name: 'Papel Interfolhado (Dispenser)', unit: 'pct' },
+          { name: 'Perfex', unit: 'un' },
+          { name: 'Pilha', unit: 'un' },
+          { name: 'Pote de Caldo', unit: 'un' },
+          { name: 'Pote Molho Salada', unit: 'un' },
+          { name: 'Pote Proteína', unit: 'un' },
+          { name: 'Rolo de Papel', unit: 'un' },
+          { name: 'Rolo de Papel Toalha', unit: 'un' },
+          { name: 'Rolo de Plástico Filme Grande', unit: 'un' },
+          { name: 'Saco de Snacks', unit: 'un' },
+          { name: 'Saco para Talher', unit: 'pct' },
+          { name: 'Sacola de Delivery', unit: 'un' },
+          { name: 'Sacola Plástica (Sobremesas/Sucos)', unit: 'un' },
+          { name: 'Sal Sachê', unit: 'cx' },
+          { name: 'Saladeira', unit: 'un' },
+          { name: 'Saquinho para Croutons de Farofa', unit: 'un' },
+          { name: 'Talher Descartável', unit: 'pct' },
+          { name: 'Tampa Proteína', unit: 'un' },
+          { name: 'Touca Descartável', unit: 'cx' },
+        ]
+      }
+    ]
+  },
+  {
+    key: 'LIMPEZA',
+    label: 'LIMPEZA',
+    groups: [
+      {
+        group: 'Produtos de Limpeza',
+        items: [
+          { name: 'Água Sanitária QBOA', unit: 'lt' },
+          { name: 'Álcool Líquido', unit: 'lt' },
+          { name: 'Desinfetante', unit: 'lt' },
+          { name: 'Detergente', unit: 'un' },
+          { name: 'Esponja de Louça', unit: 'un' },
+          { name: 'Esponja Grossa (Fibração)', unit: 'un' },
+          { name: 'Luva Descartável Plástico', unit: 'cx' },
+          { name: 'Palha de Aço', unit: 'un' },
+          { name: 'Rodo', unit: 'un' },
+          { name: 'Sabonete Líquido', unit: 'lt' },
+          { name: 'Saco de Lixo Azul', unit: 'pct' },
+          { name: 'Saco de Lixo Preto', unit: 'pct' },
+          { name: 'Vassoura', unit: 'un' },
+        ]
+      }
+    ]
+  },
+  {
+    key: 'UNIFORMES',
+    label: 'UNIF.',
+    groups: [
+      {
+        group: 'Balcão',
+        items: [
+          { name: 'Avental (Balcão)', unit: 'un' },
+          { name: 'Avental Gerência', unit: 'un' },
+          { name: 'Calça Jeans G', unit: 'un' },
+          { name: 'Calça Jeans GG', unit: 'un' },
+          { name: 'Calça Jeans M', unit: 'un' },
+          { name: 'Calça Jeans P', unit: 'un' },
+          { name: 'Camiseta Preta G', unit: 'un' },
+          { name: 'Camiseta Preta GG', unit: 'un' },
+          { name: 'Camiseta Preta M', unit: 'un' },
+          { name: 'Camiseta Preta P', unit: 'un' },
+          { name: 'Polo Gerência', unit: 'un' },
+          { name: 'Touca Jeans', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Cozinha',
+        items: [
+          { name: 'Avental Jeans (Cozinha)', unit: 'un' },
+          { name: 'Avental Branco (Plástico)', unit: 'un' },
+          { name: 'Calça Xadrez G', unit: 'un' },
+          { name: 'Calça Xadrez GG', unit: 'un' },
+          { name: 'Calça Xadrez M', unit: 'un' },
+          { name: 'Calça Xadrez P', unit: 'un' },
+          { name: 'Camiseta Branca G', unit: 'un' },
+          { name: 'Camiseta Branca GG', unit: 'un' },
+          { name: 'Camiseta Branca M', unit: 'un' },
+          { name: 'Camiseta Branca P', unit: 'un' },
+          { name: 'Crocs (Sapato de Borracha Preto)', unit: 'par' },
+          { name: 'Dólmã', unit: 'un' },
+          { name: 'Touca Xadrez', unit: 'un' },
+        ]
+      }
+    ]
+  },
+  {
+    key: 'CMV',
+    label: 'CMV',
+    groups: []
+  },
+  {
+    key: 'RESUMO',
+    label: 'RESUMO',
+    groups: []
+  }
+];
+
+// SECTIONS é a versão aplicada da unidade (base + customizações)
+let SECTIONS = BASE_SECTIONS.slice();
+
+// ── Estado ────────────────────────────────────────────────────
+let state = {
+  semana: 1,
+  data: {},      // { HORTI: { semana_1: { 'Alface': { i: 5, e: 3, f: 2 } } } }
+  cotacoes: {},  // { q1: { HORTI: { 'Alface': 4.50 } }, q2: { ... } }
+  cmv: {}        // { semana_1: { faturamento: 100000, meta_pct: 30, notas: [] } }
+};
+
+// ── Helpers de cotação ────────────────────────────────────────
+// Semanas 1-2 = quinzena q1 | Semanas 3-4 = quinzena q2
+function getQuinzena(semana)      { return semana <= 2 ? 'q1' : 'q2'; }
+function getRefSemana(semana)     { return semana <= 2 ? 1 : 3; }
+function isCotacaoRequired(semana){ return false; } // preços vêm das NFs agora
+
+function getItemPrice(sectionKey, itemName) {
+  const q = getQuinzena(state.semana);
+  return (((state.cotacoes || {})[q] || {})[sectionKey] || {})[itemName];
+}
+
+function getLastPrice(sectionKey, itemName) {
+  const cotacoes = state.cotacoes || {};
+  const q        = getQuinzena(state.semana);
+  const other    = q === 'q1' ? 'q2' : 'q1';
+  const cur  = ((cotacoes[q]     || {})[sectionKey] || {})[itemName];
+  const prev = ((cotacoes[other] || {})[sectionKey] || {})[itemName];
+  // Retorna o mais recente disponível
+  return cur !== undefined ? cur : prev;
+}
+
+function getPriceVariationPct(sectionKey, itemName) {
+  const cotacoes = state.cotacoes || {};
+  const q        = getQuinzena(state.semana);
+  const other    = q === 'q1' ? 'q2' : 'q1';
+  const cur  = ((cotacoes[q]     || {})[sectionKey] || {})[itemName];
+  const prev = ((cotacoes[other] || {})[sectionKey] || {})[itemName];
+  if (cur === undefined || prev === undefined || prev === 0) return null;
+  return ((cur - prev) / prev) * 100;
+}
+
+let saveTimer = null;
+
+// ── Inicialização ─────────────────────────────────────────────
+async function init() {
+  const unitNameEl = document.getElementById('invUnitName');
+  if (unitNameEl) unitNameEl.textContent = UNIT_NAME;
+
+  if (IS_ADMIN) {
+    const logoutBtn = document.getElementById('invLogoutBtn');
+    if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+  }
+
+  loadState();
+  updateCloudStatus('sync');
+
+  // Carregar config de itens da unidade antes de montar telas
+  await loadUnitConfig();
+  applyUnitConfig();
+
+  buildTabs();
+  buildSections();
+  renderCMVPanel();
+  switchTab(SECTIONS.find(s => s.key !== 'CMV').key);
+  updateAllBadges();
+  updateWeekButtons();
+  await loadFromCloud();
+  renderCMVPanel();
+}
+
+// ── Persistência ──────────────────────────────────────────────
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      state = parsed;
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSave, 300);
+}
+
+function doSave() {
+  state.lastSaved = new Date().toISOString();
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
+    updateSavedLabel();
+    showToast('Salvo ✓');
+    scheduleCloudSync(); // sincroniza com a nuvem após salvar
+  } catch (e) { /* ignore */ }
+}
+
+function updateSavedLabel() {
+  const el = document.getElementById('invSaved');
+  if (!el) return;
+  if (state.lastSaved) {
+    const d = new Date(state.lastSaved);
+    el.textContent = 'Salvo ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+}
+
+// ── Construção de tabs ────────────────────────────────────────
+function buildTabs() {
+  const nav = document.getElementById('invTabs');
+  nav.innerHTML = SECTIONS.filter(s => s.key !== 'CMV').map(s => `
+    <button class="inv-tab" data-key="${s.key}" onclick="switchTab('${s.key}')">
+      ${s.label}
+      ${s.key !== 'RESUMO' ? `<span class="inv-tab-badge" id="badge_${s.key}">0</span>` : ''}
+    </button>
+  `).join('');
+}
+
+// ── Construção de seções ──────────────────────────────────────
+function buildSections() {
+  const main = document.getElementById('invSections');
+  let html = '';
+
+  for (const section of SECTIONS) {
+    if (section.key === 'RESUMO') {
+      html += `<div class="inv-section" id="sec_RESUMO"><div id="resumoContent"></div></div>`;
+      continue;
+    }
+    if (section.key === 'CMV') continue;
+
+    let groupsHtml = '';
+    for (const g of section.groups) {
+      groupsHtml += `<p class="inv-section-title">${g.group}</p>`;
+      for (const item of g.items) {
+        const id = makeId(section.key, item.name);
+        groupsHtml += itemCard(section.key, item, id);
+      }
+      if (IS_ADMIN) {
+        groupsHtml += `<button class="inv-add-item-btn" data-section="${escHtml(section.key)}" data-group="${escHtml(g.group)}" onclick="openAddItemFromBtn(this)">+ Incluir insumo em ${escHtml(g.group)}</button>`;
+      }
+    }
+
+    html += `<div class="inv-section" id="sec_${section.key}">${groupsHtml}</div>`;
+  }
+
+  main.innerHTML = html;
+
+  // Restore saved values
+  restoreValues();
+  updateSavedLabel();
+}
+
+function itemCard(sectionKey, item, id) {
+  const adminControls = IS_ADMIN ? `
+    <div class="inv-item-admin-btns">
+      <button class="inv-item-btn-del" data-section="${escHtml(sectionKey)}" data-name="${escHtml(item.name)}"
+              onclick="deleteItemFromCard(this)" title="Remover insumo">🗑</button>
+    </div>` : '';
+
+  return `
+    <div class="inv-item" id="card_${id}">
+      <div class="inv-item-header">
+        <div class="inv-item-name">
+          ${escHtml(item.name)}
+          <span class="inv-item-unit">${escHtml(item.unit)}</span>
+        </div>
+        ${adminControls}
+      </div>
+
+      <!-- Preço — último valor pago + variação -->
+      <div class="inv-preco-row-simple">
+        <span class="inv-preco-label">Preço</span>
+        <span class="inv-preco-prefix-simple">R$</span>
+        <input class="inv-preco-input-simple" type="number" inputmode="decimal"
+               min="0" step="0.01" id="p_${id}" placeholder="—"
+               oninput="onPriceChange('${sectionKey}','${escHtml(item.name)}',this.value)">
+        <span class="inv-preco-unit-label">/ ${escHtml(item.unit)}</span>
+        <span class="inv-preco-hint" id="hint_${id}"></span>
+        <span class="inv-preco-var" id="var_${id}"></span>
+      </div>
+
+      <!-- Campos de contagem -->
+      <div class="inv-fields">
+        <div class="inv-field">
+          <label>Inicial</label>
+          <input type="number" inputmode="decimal" min="0" step="any"
+                 id="i_${id}" placeholder="—"
+                 oninput="onFieldChange('${sectionKey}','${escHtml(item.name)}','i',this.value)">
+        </div>
+        <div class="inv-field entrada">
+          <label>Entradas</label>
+          <input type="number" inputmode="decimal" min="0" step="any"
+                 id="e_${id}" placeholder="—"
+                 oninput="onFieldChange('${sectionKey}','${escHtml(item.name)}','e',this.value)">
+        </div>
+        <div class="inv-field">
+          <label>Final</label>
+          <input type="number" inputmode="decimal" min="0" step="any"
+                 id="f_${id}" placeholder="—"
+                 oninput="onFieldChange('${sectionKey}','${escHtml(item.name)}','f',this.value)">
+        </div>
+      </div>
+      <div class="inv-consumo">
+        <span class="inv-consumo-label">Consumo:</span>
+        <span class="inv-consumo-value zero" id="c_${id}">—</span>
+        <span style="font-size:10px;color:#aaa;margin-left:4px" id="cf_${id}"></span>
+        <span style="font-size:11px;font-weight:600;color:#D97706;margin-left:8px" id="custo_${id}"></span>
+      </div>
+    </div>`;
+}
+
+function restoreValues() {
+  for (const section of SECTIONS) {
+    if (section.key === 'RESUMO') continue;
+    const weekKey = 'semana_' + state.semana;
+    const sData = (state.data[section.key] || {})[weekKey] || {};
+
+    for (const g of section.groups) {
+      for (const item of g.items) {
+        const id = makeId(section.key, item.name);
+        const saved = sData[item.name] || {};
+
+        const iEl  = document.getElementById('i_' + id);
+        const eEl  = document.getElementById('e_' + id);
+        const fEl  = document.getElementById('f_' + id);
+        const pEl  = document.getElementById('p_' + id);
+        if (iEl && saved.i !== undefined) iEl.value = saved.i;
+        if (eEl && saved.e !== undefined) eEl.value = saved.e;
+        if (fEl && saved.f !== undefined) fEl.value = saved.f;
+
+        // Restaurar preço da quinzena atual
+        const price = getItemPrice(section.key, item.name);
+        if (pEl && price !== undefined) pEl.value = price;
+
+        // Último valor pago (outra quinzena) como hint
+        updatePriceHint(section.key, item.name, id);
+
+        updateCotacaoBadge(id);
+        updateLockState(section.key, item.name, id);
+        updateConsumption(id);
+        updateCardFilled(id);
+      }
+    }
+  }
+}
+
+// ── Mudança de campo ──────────────────────────────────────────
+function onFieldChange(sectionKey, itemName, field, rawValue) {
+  const weekKey = 'semana_' + state.semana;
+  if (!state.data[sectionKey]) state.data[sectionKey] = {};
+  if (!state.data[sectionKey][weekKey]) state.data[sectionKey][weekKey] = {};
+  if (!state.data[sectionKey][weekKey][itemName]) state.data[sectionKey][weekKey][itemName] = {};
+
+  const val = rawValue === '' ? undefined : parseFloat(rawValue);
+  if (val === undefined) {
+    delete state.data[sectionKey][weekKey][itemName][field];
+  } else {
+    state.data[sectionKey][weekKey][itemName][field] = val;
+  }
+
+  const id = makeId(sectionKey, itemName);
+  updateConsumption(id);
+  updateCardFilled(id);
+  updateBadge(sectionKey);
+  scheduleSave();
+}
+
+// ── Cotação de preço ──────────────────────────────────────────
+function onPriceChange(sectionKey, itemName, rawValue) {
+  const q = getQuinzena(state.semana);
+  if (!state.cotacoes)            state.cotacoes = {};
+  if (!state.cotacoes[q])         state.cotacoes[q] = {};
+  if (!state.cotacoes[q][sectionKey]) state.cotacoes[q][sectionKey] = {};
+
+  const val = rawValue === '' ? undefined : parseFloat(rawValue);
+  if (val === undefined) {
+    delete state.cotacoes[q][sectionKey][itemName];
+  } else {
+    state.cotacoes[q][sectionKey][itemName] = val;
+  }
+
+  const id = makeId(sectionKey, itemName);
+  updateLockState(sectionKey, itemName, id);
+  updatePriceHint(sectionKey, itemName, id);
+  updateConsumption(id);
+  scheduleSave();
+}
+
+function updatePriceHint(sectionKey, itemName, id) {
+  const hintEl = document.getElementById('hint_' + id);
+  const varEl  = document.getElementById('var_' + id);
+  if (!hintEl) return;
+
+  const cotacoes = state.cotacoes || {};
+  const q        = getQuinzena(state.semana);
+  const other    = q === 'q1' ? 'q2' : 'q1';
+  const cur  = ((cotacoes[q]     || {})[sectionKey] || {})[itemName];
+  const prev = ((cotacoes[other] || {})[sectionKey] || {})[itemName];
+
+  // Hint: mostra preço da outra quinzena se não há preço atual
+  if (cur === undefined && prev !== undefined) {
+    hintEl.textContent = `Últ: R$ ${prev.toFixed(2).replace('.',',')}`;
+    hintEl.style.display = 'inline';
+  } else {
+    hintEl.textContent = '';
+    hintEl.style.display = 'none';
+  }
+
+  // Variação de preço
+  if (varEl) {
+    if (cur !== undefined && prev !== undefined && prev > 0) {
+      const pct = ((cur - prev) / prev) * 100;
+      if (Math.abs(pct) >= 10) {
+        const up   = pct > 0;
+        varEl.textContent = `${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(0)}%`;
+        varEl.className   = 'inv-preco-var ' + (up ? 'up' : 'down');
+        varEl.style.display = 'inline';
+      } else {
+        varEl.textContent   = '';
+        varEl.style.display = 'none';
+      }
+    } else {
+      varEl.textContent   = '';
+      varEl.style.display = 'none';
+    }
+  }
+}
+
+function updateLockState(sectionKey, itemName, id) {
+  // cotação não é mais obrigatória — nunca bloqueia
+  const card = document.getElementById('card_' + id);
+  if (card) card.classList.remove('locked');
+  ['i_', 'e_', 'f_'].forEach(prefix => {
+    const el = document.getElementById(prefix + id);
+    if (el) el.disabled = false;
+  });
+}
+
+function updateCotacaoBadge(id) {
+  // sem badge obrigatório — nada a fazer
+}
+
+function updateConsumption(id) {
+  const iEl = document.getElementById('i_' + id);
+  const eEl = document.getElementById('e_' + id);
+  const fEl = document.getElementById('f_' + id);
+  const cEl = document.getElementById('c_' + id);
+  const cfEl = document.getElementById('cf_' + id);
+  if (!iEl || !fEl || !cEl) return;
+
+  const i = iEl.value !== '' ? parseFloat(iEl.value) : null;
+  const e = eEl && eEl.value !== '' ? parseFloat(eEl.value) : 0;
+  const f = fEl.value !== '' ? parseFloat(fEl.value) : null;
+
+  const custoEl = document.getElementById('custo_' + id);
+
+  if (i === null || f === null) {
+    cEl.textContent = '—';
+    cEl.className = 'inv-consumo-value zero';
+    if (cfEl)   cfEl.textContent = '';
+    if (custoEl) custoEl.textContent = '';
+    return;
+  }
+
+  // Consumo = Inicial + Entradas - Final
+  const c = i + e - f;
+  if (cfEl) cfEl.textContent = e > 0 ? `(${formatNum(i)}+${formatNum(e)}−${formatNum(f)})` : '';
+
+  if (c > 0) {
+    cEl.textContent = formatNum(c);
+    cEl.className = 'inv-consumo-value positive';
+  } else if (c < 0) {
+    cEl.textContent = formatNum(c);
+    cEl.className = 'inv-consumo-value negative';
+  } else {
+    cEl.textContent = '0';
+    cEl.className = 'inv-consumo-value zero';
+  }
+
+  // Custo estimado = consumo × preço
+  if (custoEl) {
+    const pEl = document.getElementById('p_' + id);
+    const price = pEl && pEl.value !== '' ? parseFloat(pEl.value) : null;
+    if (price !== null && c > 0) {
+      custoEl.textContent = '≈ R$ ' + (c * price).toFixed(2).replace('.', ',');
+    } else {
+      custoEl.textContent = '';
+    }
+  }
+}
+
+function updateCardFilled(id) {
+  const card = document.getElementById('card_' + id);
+  if (!card) return;
+  const iEl = document.getElementById('i_' + id);
+  const fEl = document.getElementById('f_' + id);
+  // Entradas é opcional — card preenchido se tiver Inicial e Final
+  const filled = iEl && fEl && iEl.value !== '' && fEl.value !== '';
+  card.classList.toggle('filled', filled);
+}
+
+// ── Badges ────────────────────────────────────────────────────
+function updateBadge(sectionKey) {
+  const section = SECTIONS.find(s => s.key === sectionKey);
+  if (!section || section.key === 'RESUMO') return;
+
+  const weekKey = 'semana_' + state.semana;
+  const sData = (state.data[sectionKey] || {})[weekKey] || {};
+
+  let filled = 0, total = 0;
+  for (const g of section.groups) {
+    for (const item of g.items) {
+      total++;
+      const d = sData[item.name] || {};
+      if (d.i !== undefined && d.f !== undefined) filled++;
+    }
+  }
+
+  const badge = document.getElementById('badge_' + sectionKey);
+  if (badge) badge.textContent = `${filled}/${total}`;
+}
+
+function updateAllBadges() {
+  for (const s of SECTIONS) {
+    if (s.key !== 'RESUMO') updateBadge(s.key);
+  }
+}
+
+// ── Navegação de abas ─────────────────────────────────────────
+function switchTab(key) {
+  document.querySelectorAll('.inv-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.key === key);
+  });
+  document.querySelectorAll('.inv-section').forEach(s => {
+    s.classList.toggle('active', s.id === 'sec_' + key);
+  });
+
+  if (key === 'RESUMO') {
+    document.getElementById('invOverlay').classList.add('open');
+    document.getElementById('invPin').value = '';
+    document.getElementById('invPin').classList.remove('error');
+    setTimeout(() => document.getElementById('invPin').focus(), 100);
+  }
+}
+
+// ── Semana ────────────────────────────────────────────────────
+function switchWeek(w) {
+  state.semana = w;
+  updateWeekButtons();
+  restoreValues();
+  updateAllBadges();
+  renderCMVPanel();
+}
+
+function updateWeekButtons() {
+  document.querySelectorAll('.inv-week-btn, .inv-week-bar-inner .inv-week-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.week) === state.semana);
+  });
+}
+
+// ── PIN / Resumo ──────────────────────────────────────────────
+function checkPin() {
+  const val = document.getElementById('invPin').value;
+  const validPins = [
+    ...(UNIT_ADMINS[UNIT_ID] || []).map(a => a.pin),
+    ...(UNIT_ADMINS.global   || []).map(a => a.pin),
+  ];
+  if (validPins.includes(val)) {
+    document.getElementById('invOverlay').classList.remove('open');
+    if (window._pinCallback) {
+      window._pinCallback();
+      window._pinCallback = null;
+    } else {
+      renderResumo();
+    }
+  } else {
+    const input = document.getElementById('invPin');
+    input.classList.add('error');
+    input.value = '';
+    setTimeout(() => input.classList.remove('error'), 400);
+  }
+}
+
+function closePin() {
+  document.getElementById('invOverlay').classList.remove('open');
+  switchTab(SECTIONS[0].key);
+}
+
+function renderResumo() {
+  const container = document.getElementById('resumoContent');
+
+  const cards = SECTIONS.filter(s => s.key !== 'RESUMO').map(section => {
+    const weekKey = 'semana_' + state.semana;
+    const sData = (state.data[section.key] || {})[weekKey] || {};
+    let filled = 0, total = 0, totalConsumo = 0, totalCusto = 0;
+
+    for (const g of section.groups) {
+      for (const item of g.items) {
+        total++;
+        const d     = sData[item.name] || {};
+        const price = getItemPrice(section.key, item.name);
+        if (d.i !== undefined && d.f !== undefined) {
+          filled++;
+          const c = d.i + (d.e || 0) - d.f;
+          totalConsumo += c;
+          if (price !== undefined && c > 0) totalCusto += c * price;
+        }
+      }
+    }
+
+    const pct = total > 0 ? filled / total : 0;
+    let statusClass, statusText;
+    if (pct === 1) { statusClass = 'completo'; statusText = 'Completo'; }
+    else if (pct > 0) { statusClass = 'andamento'; statusText = 'Em andamento'; }
+    else { statusClass = 'nao-iniciado'; statusText = 'Não iniciado'; }
+
+    return `
+      <div class="inv-resumo-card" onclick="toggleDetail('${section.key}')">
+        <div class="inv-resumo-card-title">${section.label}</div>
+        <div class="inv-resumo-card-count">${filled}<span style="font-size:14px;font-weight:500;color:#999">/${total}</span></div>
+        <div class="inv-resumo-card-sub">Consumo: ${formatNum(totalConsumo)} · Custo: R$ ${totalCusto > 0 ? totalCusto.toFixed(2).replace('.',',') : '—'}</div>
+        <span class="inv-resumo-status ${statusClass}">${statusText}</span>
+        <div class="inv-resumo-detail" id="detail_${section.key}">
+          ${renderDetailTable(section, sData)}
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <p class="inv-section-title" style="margin-bottom:16px">Semana ${state.semana} — Resumo Geral</p>
+    <div class="inv-resumo-cards">${cards}</div>
+    <div class="inv-resumo-actions">
+      <button class="inv-btn inv-btn-primary" onclick="exportCSV()">⬇ Exportar CSV — Semana ${state.semana}</button>
+      <button class="inv-btn inv-btn-danger" onclick="confirmClear()">Limpar dados — Semana ${state.semana}</button>
+    </div>
+    <div class="inv-footer">PIN: ${OWNER_PIN} · Dados salvos neste dispositivo</div>`;
+}
+
+function renderDetailTable(section, sData) {
+  let rows = '';
+  for (const g of section.groups) {
+    for (const item of g.items) {
+      const d = sData[item.name] || {};
+      const hasData = d.i !== undefined && d.f !== undefined;
+      if (!hasData) continue;
+      const e     = d.e || 0;
+      const c     = d.i + e - d.f;
+      const price = getItemPrice(section.key, item.name);
+      const custo = (price !== undefined && c > 0) ? (c * price).toFixed(2).replace('.', ',') : '—';
+      const cls   = c > 0 ? 'td-positive' : c < 0 ? 'td-negative' : 'td-zero';
+      rows += `<tr>
+        <td>${escHtml(item.name)}</td>
+        <td>${formatNum(d.i)}</td>
+        <td>${e > 0 ? formatNum(e) : '—'}</td>
+        <td>${formatNum(d.f)}</td>
+        <td class="${cls}">${formatNum(c)}</td>
+        <td>${price !== undefined ? 'R$ ' + price.toFixed(2).replace('.',',') : '—'}</td>
+        <td>${custo !== '—' ? 'R$ ' + custo : '—'}</td>
+      </tr>`;
+    }
+  }
+  if (!rows) return '<p style="font-size:12px;color:#999;padding:8px">Nenhum item preenchido</p>';
+  return `<table class="inv-detail-table">
+    <thead><tr><th>Item</th><th>Inicial</th><th>Entradas</th><th>Final</th><th>Consumo</th><th>Preço</th><th>Custo</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function toggleDetail(sectionKey) {
+  const el = document.getElementById('detail_' + sectionKey);
+  if (el) el.classList.toggle('open');
+}
+
+// ── Exportar CSV ──────────────────────────────────────────────
+function exportCSV() {
+  const rows = ['Secao,Item,Unidade,Semana,Preco,Inicial,Entradas,Final,Consumo,Custo'];
+  const weekKey = 'semana_' + state.semana;
+
+  for (const section of SECTIONS) {
+    if (section.key === 'RESUMO') continue;
+    const sData = (state.data[section.key] || {})[weekKey] || {};
+
+    for (const g of section.groups) {
+      for (const item of g.items) {
+        const d     = sData[item.name] || {};
+        const price = getItemPrice(section.key, item.name);
+        const i     = d.i !== undefined ? d.i : '';
+        const e     = d.e !== undefined ? d.e : '';
+        const f     = d.f !== undefined ? d.f : '';
+        const eVal  = d.e || 0;
+        const c     = (d.i !== undefined && d.f !== undefined) ? d.i + eVal - d.f : '';
+        const custo = (price !== undefined && typeof c === 'number' && c > 0)
+                      ? (c * price).toFixed(2) : '';
+        rows.push([
+          csvCell(section.label),
+          csvCell(item.name),
+          csvCell(item.unit),
+          state.semana,
+          price !== undefined ? price.toFixed(2) : '',
+          i, e, f, c, custo
+        ].join(','));
+      }
+    }
+  }
+
+  const csv = rows.join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const today = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `inventario_semana_${state.semana}_${today}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function confirmClear() {
+  if (confirm(`Tem certeza que quer apagar todos os dados da Semana ${state.semana}? Esta ação não pode ser desfeita.`)) {
+    const weekKey = 'semana_' + state.semana;
+    for (const section of SECTIONS) {
+      if (state.data[section.key]) {
+        delete state.data[section.key][weekKey];
+      }
+    }
+    doSave();
+    restoreValues();
+    updateAllBadges();
+    renderResumo();
+    showToast('Semana ' + state.semana + ' apagada');
+  }
+}
+
+// ── CMV ───────────────────────────────────────────────────────
+function getCMVData() {
+  const key = 'semana_' + state.semana;
+  if (!state.cmv) state.cmv = {};
+  if (!state.cmv[key]) state.cmv[key] = { faturamento: null, meta_pct: 30, notas: [] };
+  return state.cmv[key];
+}
+
+function renderCMV() {
+  const container = document.getElementById('cmvContent');
+  if (!container) return;
+  const d      = getCMVData();
+  const fat    = d.faturamento;
+  const pct    = d.meta_pct || 30;
+  const notas  = d.notas || [];
+  const total  = notas.reduce((s, n) => s + (n.valor || 0), 0);
+  const meta   = fat ? fat * pct / 100 : null;
+  const saldo  = meta !== null ? meta - total : null;
+  const cmvReal = fat ? (total / fat * 100) : null;
+  const progPct = meta ? Math.min(total / meta * 100, 100) : 0;
+  const semRef  = state.semana > 1 ? `Sem. ${state.semana - 1}` : 'semana anterior';
+
+  // Cor da barra
+  let barColor = '#22c55e';
+  if (progPct >= 100) barColor = '#ef4444';
+  else if (progPct >= 80) barColor = '#f59e0b';
+
+  // Card de configuração (sempre visível, campos bloqueados sem PIN)
+  const configHtml = `
+    <div class="cmv-config-card" id="cmvConfigCard">
+      <div class="cmv-config-header">
+        <span class="cmv-config-title">Configuração (${semRef})</span>
+        <button class="cmv-config-pin-btn" id="cmvConfigBtn" onclick="openCMVConfig()">🔒 Configurar</button>
+      </div>
+      <div class="cmv-config-fields" id="cmvConfigFields" style="display:none">
+        <div class="cmv-config-row">
+          <label>Faturamento da ${semRef}</label>
+          <div class="cmv-input-wrap">
+            <span class="cmv-prefix">R$</span>
+            <input type="number" inputmode="decimal" id="cmvFaturamento" placeholder="0,00"
+                   value="${fat || ''}" oninput="onCMVConfigChange()">
+          </div>
+        </div>
+        <div class="cmv-config-row">
+          <label>Meta CMV (%)</label>
+          <div class="cmv-input-wrap">
+            <input type="number" inputmode="decimal" id="cmvMetaPct" placeholder="30"
+                   value="${pct}" min="1" max="100" oninput="onCMVConfigChange()">
+            <span class="cmv-suffix">%</span>
+          </div>
+        </div>
+        ${meta !== null ? `<div class="cmv-meta-result">Meta de gasto: <strong>R$ ${fmt(meta)}</strong></div>` : ''}
+      </div>
+    </div>`;
+
+  // Painel de progresso
+  const painelHtml = fat ? `
+    <div class="cmv-painel">
+      <div class="cmv-painel-top">
+        <div>
+          <div class="cmv-painel-label">Gasto até agora</div>
+          <div class="cmv-painel-valor">R$ ${fmt(total)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="cmv-painel-label">Meta</div>
+          <div class="cmv-painel-valor">R$ ${fmt(meta)}</div>
+        </div>
+      </div>
+      <div class="cmv-bar-bg">
+        <div class="cmv-bar-fill" style="width:${progPct}%;background:${barColor}"></div>
+      </div>
+      <div class="cmv-painel-bottom">
+        <span class="cmv-cmv-real" style="color:${barColor}">CMV: ${cmvReal.toFixed(1)}%</span>
+        <span class="cmv-saldo ${saldo < 0 ? 'negativo' : ''}">
+          ${saldo >= 0 ? `Saldo: R$ ${fmt(saldo)}` : `⚠ Estourou R$ ${fmt(Math.abs(saldo))}`}
+        </span>
+      </div>
+    </div>` : `
+    <div class="cmv-painel cmv-painel-vazio">
+      <span>Configure o faturamento para ver o painel</span>
+    </div>`;
+
+  // Lista de notas
+  const notasHtml = notas.length ? notas.map(n => `
+    <div class="cmv-nota">
+      <div class="cmv-nota-info">
+        <span class="cmv-nota-fornecedor">${escHtml(n.fornecedor)}</span>
+        <span class="cmv-nota-data">${n.data || ''}</span>
+      </div>
+      <div class="cmv-nota-right">
+        <span class="cmv-nota-valor">R$ ${fmt(n.valor)}</span>
+        <button class="cmv-nota-del" onclick="deleteNota('${n.id}')">✕</button>
+      </div>
+    </div>`).join('') : `<p class="cmv-notas-vazio">Nenhuma nota inserida ainda</p>`;
+
+  container.innerHTML = `
+    <p class="inv-section-title" style="margin-bottom:12px">CMV — Semana ${state.semana}</p>
+    ${configHtml}
+    ${painelHtml}
+    <div class="cmv-notas-header">
+      <span class="inv-section-title">Notas Fiscais · Total: R$ ${fmt(total)}</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="cmv-foto-btn" onclick="openCameraForNF()">📷 Foto NF</button>
+        <button class="cmv-add-btn" onclick="openAddNota()">+ Manual</button>
+      </div>
+    </div>
+    <div class="cmv-notas-list">${notasHtml}</div>`;
+}
+
+function openCMVConfig() {
+  document.getElementById('invOverlay').classList.add('open');
+  document.getElementById('invPin').value = '';
+  document.getElementById('invPin').classList.remove('error');
+  window._pinCallback = () => {
+    const d = getCMVData();
+    const sem = state.semana;
+    const semRef = sem > 1 ? `Sem. ${sem - 1}` : 'semana anterior';
+    document.getElementById('cmvConfigSemRef').textContent = `Faturamento da ${semRef} — meta para Sem. ${sem}`;
+    document.getElementById('cmvFaturamento').value = d.faturamento != null ? d.faturamento : '';
+    document.getElementById('cmvMetaPct').value = d.meta_pct || 30;
+    updateCMVConfigResult();
+    document.getElementById('invCMVConfigOverlay').classList.add('open');
+  };
+  setTimeout(() => document.getElementById('invPin').focus(), 100);
+}
+
+function updateCMVConfigResult() {
+  const fat = parseFloat(document.getElementById('cmvFaturamento').value);
+  const pct = parseFloat(document.getElementById('cmvMetaPct').value) || 30;
+  const el  = document.getElementById('cmvConfigResult');
+  if (el && !isNaN(fat) && fat > 0) {
+    el.innerHTML = `Meta de gasto: <strong>R$ ${fmt(fat * pct / 100)}</strong>`;
+  } else if (el) {
+    el.textContent = '';
+  }
+}
+
+function onCMVConfigChange() {
+  const d   = getCMVData();
+  const fat = document.getElementById('cmvFaturamento');
+  const pct = document.getElementById('cmvMetaPct');
+  if (fat) d.faturamento = fat.value !== '' ? parseFloat(fat.value) : null;
+  if (pct) d.meta_pct    = pct.value !== '' ? parseFloat(pct.value) : 30;
+  scheduleSave();
+  updateCMVConfigResult();
+  renderCMVPanel();
+}
+
+function closeCMVConfig() {
+  document.getElementById('invCMVConfigOverlay').classList.remove('open');
+}
+
+function openAddNota() {
+  document.getElementById('invNotaOverlay').classList.add('open');
+  document.getElementById('notaFornecedor').value = '';
+  document.getElementById('notaValor').value = '';
+  document.getElementById('notaData').value = new Date().toISOString().slice(0,10);
+  setTimeout(() => document.getElementById('notaFornecedor').focus(), 100);
+}
+
+function closeAddNota() {
+  document.getElementById('invNotaOverlay').classList.remove('open');
+}
+
+function saveNota() {
+  const fornecedor = document.getElementById('notaFornecedor').value.trim();
+  const valor      = parseFloat(document.getElementById('notaValor').value);
+  const data       = document.getElementById('notaData').value;
+
+  if (!fornecedor || isNaN(valor) || valor <= 0) {
+    document.getElementById('notaFornecedor').classList.toggle('error', !fornecedor);
+    document.getElementById('notaValor').classList.toggle('error', isNaN(valor) || valor <= 0);
+    return;
+  }
+
+  const d = getCMVData();
+  if (!d.notas) d.notas = [];
+  d.notas.push({
+    id:         Date.now().toString(36),
+    fornecedor,
+    valor,
+    data:       data ? new Date(data).toLocaleDateString('pt-BR') : ''
+  });
+  closeAddNota();
+  doSave();
+  renderCMVPanel();
+}
+
+function deleteNota(id) {
+  if (!confirm('Remover esta nota?')) return;
+  const d = getCMVData();
+  d.notas = (d.notas || []).filter(n => n.id !== id);
+  doSave();
+  renderCMVPanel();
+}
+
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── Supabase Cloud Sync ───────────────────────────────────────
+let cloudSyncTimer = null;
+
+function supabaseHeaders() {
+  return {
+    'apikey':        SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
+    'Content-Type':  'application/json'
+  };
+}
+
+async function loadFromCloud() {
+  if (!SUPABASE_CONFIGURED) { updateCloudStatus('nao-configurado'); return; }
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.${CLOUD_DADOS}&select=estado,atualizado_em`,
+      { headers: supabaseHeaders() }
+    );
+    if (!res.ok) { updateCloudStatus('erro'); return; }
+
+    const rows = await res.json();
+    if (!rows.length || !rows[0].estado) { updateCloudStatus('ok'); return; }
+
+    const cloudState   = rows[0].estado;
+    const cloudTime    = new Date(rows[0].atualizado_em);
+    const localTime    = state.lastSaved ? new Date(state.lastSaved) : new Date(0);
+
+    // Nuvem mais recente → atualiza tela e localStorage
+    if (cloudTime > localTime) {
+      state = { ...state, ...cloudState };
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
+      restoreValues();
+      updateAllBadges();
+      updateSavedLabel();
+    }
+    updateCloudStatus('ok');
+  } catch (e) {
+    updateCloudStatus('offline');
+  }
+}
+
+async function syncToCloud() {
+  if (!SUPABASE_CONFIGURED) return;
+  updateCloudStatus('sync');
+  try {
+    const payload = {
+      chave:        CLOUD_DADOS,
+      estado:       state,
+      atualizado_em: new Date().toISOString()
+    };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+      method:  'POST',
+      headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+      body:    JSON.stringify(payload)
+    });
+    updateCloudStatus(res.ok ? 'ok' : 'erro');
+  } catch (e) {
+    updateCloudStatus('offline');
+  }
+}
+
+function scheduleCloudSync() {
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(syncToCloud, 3000); // sincroniza 3s após último input
+}
+
+function updateCloudStatus(status) {
+  const el = document.getElementById('invCloudStatus');
+  if (!el) return;
+  const map = {
+    'ok':             { icon: '☁',  color: '#4ade80', title: 'Sincronizado com a nuvem' },
+    'sync':           { icon: '↻',  color: '#93c5fd', title: 'Sincronizando...' },
+    'offline':        { icon: '⚡', color: '#fbbf24', title: 'Sem internet — dados salvos localmente' },
+    'erro':           { icon: '⚠', color: '#f87171', title: 'Erro ao sincronizar — verifique a conexão' },
+    'nao-configurado':{ icon: '○',  color: '#888',    title: 'Nuvem não configurada (apenas local)' }
+  };
+  const s = map[status] || map['offline'];
+  el.textContent   = s.icon;
+  el.style.color   = s.color;
+  el.title         = s.title;
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('invToast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function makeId(sectionKey, itemName) {
+  return (sectionKey + '_' + itemName)
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .replace(/_+/g, '_');
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatNum(n) {
+  if (n === null || n === undefined || n === '') return '—';
+  const num = parseFloat(n);
+  if (isNaN(num)) return '—';
+  return Number.isInteger(num) ? num : num.toFixed(2).replace('.', ',');
+}
+
+function csvCell(val) {
+  const s = String(val);
+  return s.includes(',') || s.includes('"') ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// ── Config de itens por unidade ───────────────────────────────
+async function loadUnitConfig() {
+  if (!SUPABASE_CONFIGURED) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.${CLOUD_CFG}&select=estado`,
+      { headers: supabaseHeaders() }
+    );
+    if (!res.ok) return;
+    const rows = await res.json();
+    if (rows.length && rows[0].estado) {
+      unitConfig = { added: {}, deleted: {}, ...rows[0].estado };
+    }
+  } catch(e) {}
+}
+
+async function saveUnitConfig() {
+  if (!SUPABASE_CONFIGURED) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+      method:  'POST',
+      headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+      body:    JSON.stringify({ chave: CLOUD_CFG, estado: unitConfig, atualizado_em: new Date().toISOString() })
+    });
+  } catch(e) {}
+}
+
+function applyUnitConfig() {
+  const added   = unitConfig.added   || {};
+  const deleted = unitConfig.deleted || {};
+
+  SECTIONS = BASE_SECTIONS.map(section => {
+    if (section.key === 'CMV' || section.key === 'RESUMO') return section;
+
+    const sAdded   = added[section.key]   || [];
+    const sDeleted = new Set(deleted[section.key] || []);
+
+    const groups = section.groups.map(g => ({
+      group: g.group,
+      items: g.items.filter(item => !sDeleted.has(item.name)).map(i => ({ ...i }))
+    }));
+
+    for (const newItem of sAdded) {
+      const g = groups.find(gr => gr.group === newItem.group);
+      if (g) {
+        if (!g.items.find(i => i.name === newItem.name)) {
+          g.items.push({ name: newItem.name, unit: newItem.unit || 'un' });
+        }
+      } else {
+        groups.push({ group: newItem.group, items: [{ name: newItem.name, unit: newItem.unit || 'un' }] });
+      }
+    }
+
+    return { key: section.key, label: section.label, groups };
+  });
+}
+
+// ── Modo edição de itens ──────────────────────────────────────
+function toggleEditMode() {
+  if (!IS_ADMIN) return;
+  editMode = !editMode;
+  updateEditModeUI();
+}
+
+function updateEditModeUI() {
+  document.body.classList.toggle('edit-mode', editMode);
+  const btn = document.getElementById('editModeBtn');
+  if (btn) {
+    btn.textContent = editMode ? '✓ Fechar Edição' : '✏ Editar Lista';
+    btn.style.background = editMode ? '#22c55e' : '#f59e0b';
+  }
+}
+
+function openAddItemFromBtn(btn) {
+  openAddItem(btn.dataset.section, btn.dataset.group);
+}
+
+function openAddItem(sectionKey, groupName) {
+  currentEditSection = { sectionKey, groupName };
+  const lbl = document.getElementById('addItemGroupLabel');
+  if (lbl) lbl.textContent = 'Grupo: ' + groupName;
+  const nameEl = document.getElementById('addItemName');
+  const unitEl = document.getElementById('addItemUnit');
+  if (nameEl) { nameEl.value = ''; nameEl.classList.remove('error'); }
+  if (unitEl) unitEl.value = '';
+  document.getElementById('invAddItemOverlay').classList.add('open');
+  setTimeout(() => nameEl && nameEl.focus(), 100);
+}
+
+function closeAddItem() {
+  document.getElementById('invAddItemOverlay').classList.remove('open');
+  currentEditSection = null;
+}
+
+function saveNewItem() {
+  const nameEl = document.getElementById('addItemName');
+  const unitEl = document.getElementById('addItemUnit');
+  const name = nameEl.value.trim();
+  const unit = unitEl.value.trim() || 'un';
+
+  if (!name) { nameEl.classList.add('error'); return; }
+  if (!currentEditSection) return;
+
+  const { sectionKey, groupName } = currentEditSection;
+  if (!unitConfig.added[sectionKey]) unitConfig.added[sectionKey] = [];
+  if (unitConfig.added[sectionKey].find(i => i.name === name)) {
+    showToast('Item já existe!'); return;
+  }
+
+  if (unitConfig.deleted[sectionKey]) {
+    unitConfig.deleted[sectionKey] = unitConfig.deleted[sectionKey].filter(n => n !== name);
+  }
+  unitConfig.added[sectionKey].push({ group: groupName, name, unit });
+
+  saveUnitConfig();
+  closeAddItem();
+  rebuildSections();
+  showToast('Item adicionado ✓');
+}
+
+function deleteItemFromCard(btn) {
+  deleteItem(btn.dataset.section, btn.dataset.name);
+}
+
+function deleteItem(sectionKey, itemName) {
+  if (!confirm(`Remover "${itemName}" desta unidade?`)) return;
+
+  if (!unitConfig.deleted[sectionKey]) unitConfig.deleted[sectionKey] = [];
+  if (!unitConfig.deleted[sectionKey].includes(itemName)) {
+    unitConfig.deleted[sectionKey].push(itemName);
+  }
+  if (unitConfig.added[sectionKey]) {
+    unitConfig.added[sectionKey] = unitConfig.added[sectionKey].filter(i => i.name !== itemName);
+  }
+
+  saveUnitConfig();
+  rebuildSections();
+  showToast('Item removido');
+}
+
+function rebuildSections() {
+  const activeKey = (document.querySelector('.inv-tab.active') || {}).dataset?.key || SECTIONS[0]?.key;
+  applyUnitConfig();
+  buildSections();
+  document.querySelectorAll('.inv-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.key === activeKey));
+  document.querySelectorAll('.inv-section').forEach(s =>
+    s.classList.toggle('active', s.id === 'sec_' + activeKey));
+  updateAllBadges();
+}
+
+function logout() {
+  sessionStorage.removeItem('inv_session');
+  window.location.href = 'index.html';
+}
+
+// ── Leitura de NF por foto (Gemini Vision) ────────────────────
+let mapeamentos     = {};
+let nfExtractedItems = [];
+
+async function loadMapeamentos() {
+  if (!SUPABASE_CONFIGURED) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.mapeamentos&select=estado`,
+      { headers: supabaseHeaders() }
+    );
+    if (!res.ok) return;
+    const rows = await res.json();
+    if (rows.length && rows[0].estado) mapeamentos = rows[0].estado;
+  } catch(e) {}
+}
+
+async function saveMapeamentos() {
+  if (!SUPABASE_CONFIGURED) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+      method:  'POST',
+      headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+      body:    JSON.stringify({ chave: 'mapeamentos', estado: mapeamentos, atualizado_em: new Date().toISOString() })
+    });
+  } catch(e) {}
+}
+
+function openCameraForNF() {
+  document.getElementById('nfCamera').click();
+}
+
+async function handleNFPhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  input.value = '';
+
+  document.getElementById('nfReviewLoading').style.display = 'block';
+  document.getElementById('nfReviewContent').style.display = 'none';
+  document.getElementById('invNFReviewOverlay').classList.add('open');
+
+  try {
+    const base64 = await fileToBase64(file);
+    await loadMapeamentos();
+    const geminiData = await callGemini(base64, 'image/jpeg');
+    showNFReview(geminiData);
+  } catch(e) {
+    document.getElementById('invNFReviewOverlay').classList.remove('open');
+    const msg = e?.message || String(e);
+    console.error('Gemini error completo:', msg);
+    showToast('Erro: ' + msg.slice(0, 80));
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const img    = new Image();
+    const url    = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX  = 1280;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else        { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function callGemini(base64Data, mimeType, attempt = 1) {
+  const prompt = `Você está lendo uma nota fiscal ou cupom fiscal brasileiro. Extraia os dados e retorne APENAS um JSON válido (sem markdown, sem explicação):
+{
+  "fornecedor": "nome da empresa emitente",
+  "data": "DD/MM/YYYY",
+  "itens": [
+    { "descricao": "descrição do produto", "quantidade": 1.0, "unidade": "UN", "preco_unitario": 0.00, "preco_total": 0.00 }
+  ],
+  "valor_total": 0.00
+}
+Se não conseguir ler algum campo, use null. Retorne APENAS o JSON, sem texto adicional.`;
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+      body:    JSON.stringify({
+        contents: [{ parts: [
+          { inline_data: { mime_type: mimeType, data: base64Data } },
+          { text: prompt }
+        ]}],
+        generationConfig: { temperature: 0.1 }
+      })
+    }
+  );
+
+  if (!resp.ok) {
+    if ((resp.status === 503 || resp.status === 429) && attempt < 3) {
+      await new Promise(r => setTimeout(r, 2000 * attempt));
+      return callGemini(base64Data, mimeType, attempt + 1);
+    }
+    const errText = await resp.text();
+    throw new Error('Gemini ' + resp.status + ': ' + errText);
+  }
+
+  const data = await resp.json();
+  const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  const clean = text.replace(/^```json\n?/,'').replace(/^```\n?/,'').replace(/```$/,'').trim();
+  return JSON.parse(clean);
+}
+
+function normalizeForMatch(s) {
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function findBestMatch(description) {
+  const normDesc = normalizeForMatch(description);
+
+  // Mapeamento salvo tem prioridade
+  if (mapeamentos[normDesc]) {
+    const m = mapeamentos[normDesc];
+    return { sectionKey: m.sectionKey, itemName: m.itemName, score: 1.0 };
+  }
+
+  const words = normDesc.split(' ').filter(w => w.length > 2);
+  let bestScore = 0, bestMatch = null;
+
+  for (const section of SECTIONS) {
+    if (section.key === 'CMV' || section.key === 'RESUMO') continue;
+    for (const g of section.groups) {
+      for (const item of g.items) {
+        const itemNorm  = normalizeForMatch(item.name);
+        const itemWords = itemNorm.split(' ').filter(w => w.length > 2);
+        const matches   = words.filter(w => itemWords.some(iw => iw.includes(w) || w.includes(iw)));
+        const score     = matches.length / Math.max(words.length, itemWords.length, 1);
+        if (score > bestScore) { bestScore = score; bestMatch = { sectionKey: section.key, itemName: item.name, score }; }
+      }
+    }
+  }
+
+  return bestScore >= 0.35 ? bestMatch : null;
+}
+
+function showNFReview(geminiData) {
+  document.getElementById('nfReviewLoading').style.display = 'none';
+  document.getElementById('nfReviewContent').style.display = 'block';
+
+  const fornEl = document.getElementById('nfRevFornecedor');
+  const dataEl = document.getElementById('nfRevData');
+  if (fornEl) fornEl.value = geminiData.fornecedor || '';
+  if (dataEl && geminiData.data) {
+    const p = geminiData.data.split('/');
+    if (p.length === 3) dataEl.value = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+  } else if (dataEl) {
+    dataEl.value = new Date().toISOString().slice(0,10);
+  }
+
+  nfExtractedItems = (geminiData.itens || []).map((item, idx) => ({
+    id:             idx,
+    descricao:      item.descricao || '',
+    quantidade:     item.quantidade || 1,
+    unidade:        item.unidade || 'UN',
+    preco_unitario: item.preco_unitario || 0,
+    preco_total:    item.preco_total || (item.quantidade || 1) * (item.preco_unitario || 0),
+    match:          findBestMatch(item.descricao || ''),
+    incluir:        true
+  }));
+
+  renderNFItems();
+}
+
+function renderNFItems() {
+  const list = document.getElementById('nfItemsList');
+  if (!list) return;
+
+  const allItems = [];
+  for (const section of SECTIONS) {
+    if (section.key === 'CMV' || section.key === 'RESUMO') continue;
+    for (const g of section.groups)
+      for (const item of g.items)
+        allItems.push({ sectionKey: section.key, itemName: item.name, label: `[${section.label}] ${item.name}` });
+  }
+  allItems.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+
+  list.innerHTML = nfExtractedItems.map(item => {
+    const matchVal  = item.match ? `${item.match.sectionKey}::${item.match.itemName}` : '';
+    const matchBadge = item.match
+      ? (item.match.score === 1.0 ? 'nf-match-saved' : 'nf-match-auto')
+      : 'nf-match-none';
+    const matchLabel = item.match
+      ? `[${item.match.sectionKey}] ${item.match.itemName}`
+      : 'Não identificado — selecione abaixo';
+
+    const opts = `<option value=""${!matchVal ? ' selected' : ''}>— Não usar —</option>` +
+      allItems.map(i => {
+        const v   = `${i.sectionKey}::${i.itemName}`;
+        const sel = v === matchVal ? ' selected' : '';
+        return `<option value="${escHtml(v)}"${sel}>${escHtml(i.label)}</option>`;
+      }).join('');
+
+    return `<div class="nf-item${item.incluir ? '' : ' nf-item-off'}" id="nfitem_${item.id}">
+      <input class="nf-item-chk" type="checkbox" ${item.incluir ? 'checked' : ''} onchange="toggleNFItem(${item.id},this.checked)">
+      <div class="nf-item-body">
+        <div class="nf-item-desc">${escHtml(item.descricao)}</div>
+        <div class="nf-item-meta">Qtd: ${item.quantidade} ${item.unidade} · R$&nbsp;${fmt(item.preco_unitario)}/un · Total: R$&nbsp;${fmt(item.preco_total)}</div>
+        <span class="nf-match-badge ${matchBadge}">${matchLabel}</span>
+        <select class="nf-item-select" onchange="changeNFMatch(${item.id},this.value)">${opts}</select>
+      </div>
+    </div>`;
+  }).join('') || '<p style="color:#999;text-align:center;padding:16px">Nenhum item identificado</p>';
+
+  updateNFTotal();
+}
+
+function toggleNFItem(id, checked) {
+  const item = nfExtractedItems.find(i => i.id === id);
+  if (!item) return;
+  item.incluir = checked;
+  const el = document.getElementById('nfitem_' + id);
+  if (el) el.classList.toggle('nf-item-off', !checked);
+  updateNFTotal();
+}
+
+function changeNFMatch(id, value) {
+  const item = nfExtractedItems.find(i => i.id === id);
+  if (!item) return;
+  if (value) {
+    const sep = value.indexOf('::');
+    const sectionKey = value.slice(0, sep);
+    const itemName   = value.slice(sep + 2);
+    item.match = { sectionKey, itemName };
+    mapeamentos[normalizeForMatch(item.descricao)] = { sectionKey, itemName };
+  } else {
+    item.match = null;
+  }
+  const badge = document.querySelector(`#nfitem_${id} .nf-match-badge`);
+  if (badge) {
+    badge.textContent = item.match ? `[${item.match.sectionKey}] ${item.match.itemName}` : 'Não identificado — selecione abaixo';
+    badge.className   = 'nf-match-badge ' + (item.match ? 'nf-match-auto' : 'nf-match-none');
+  }
+}
+
+function updateNFTotal() {
+  const total = nfExtractedItems.filter(i => i.incluir).reduce((s, i) => s + (i.preco_total || 0), 0);
+  const el = document.getElementById('nfTotalConfirmado');
+  if (el) el.textContent = 'R$ ' + fmt(total);
+}
+
+function closeNFReview() {
+  document.getElementById('invNFReviewOverlay').classList.remove('open');
+  nfExtractedItems = [];
+}
+
+async function confirmNFItems() {
+  const fornecedor = (document.getElementById('nfRevFornecedor').value.trim()) || 'Fornecedor NF';
+  const dataVal    = document.getElementById('nfRevData').value;
+  const dataFmt    = dataVal ? new Date(dataVal).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
+  const included   = nfExtractedItems.filter(i => i.incluir);
+  const total      = included.reduce((s, i) => s + (i.preco_total || 0), 0);
+
+  // Salvar nota
+  const d = getCMVData();
+  if (!d.notas) d.notas = [];
+  d.notas.push({ id: Date.now().toString(36), fornecedor, valor: total, data: dataFmt });
+
+  // Atualizar cotações com preços lidos
+  const q = getQuinzena(state.semana);
+  if (!state.cotacoes)    state.cotacoes = {};
+  if (!state.cotacoes[q]) state.cotacoes[q] = {};
+
+  let updatedPrices = 0;
+  for (const item of included) {
+    if (item.match && item.preco_unitario > 0) {
+      const { sectionKey, itemName } = item.match;
+      if (!state.cotacoes[q][sectionKey]) state.cotacoes[q][sectionKey] = {};
+      state.cotacoes[q][sectionKey][itemName] = item.preco_unitario;
+      updatedPrices++;
+    }
+  }
+
+  saveMapeamentos();
+  doSave();
+  closeNFReview();
+  renderCMVPanel();
+  restoreValues();
+  showToast(`NF salva ✓ · ${updatedPrices} preço${updatedPrices !== 1 ? 's' : ''} atualizado${updatedPrices !== 1 ? 's' : ''}`);
+}
+
+// ── CMV Top Panel ─────────────────────────────────────────────
+
+function calcMonthlyAvg() {
+  let sum = 0, count = 0;
+  for (let w = 1; w <= 4; w++) {
+    const key = 'semana_' + w;
+    const d = (state.cmv || {})[key];
+    if (d && d.faturamento && d.faturamento > 0) {
+      const total = (d.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
+      sum += (total / d.faturamento) * 100;
+      count++;
+    }
+  }
+  return count > 0 ? { avg: sum / count, weeks: count } : null;
+}
+
+function renderCMVPanel() {
+  const panel = document.getElementById('cmvPanel');
+  if (!panel) return;
+
+  const d      = getCMVData();
+  const fat    = d.faturamento;
+  const pct    = d.meta_pct || 30;
+  const notas  = d.notas || [];
+  const total  = notas.reduce((s, n) => s + (n.valor || 0), 0);
+  const meta   = fat ? fat * pct / 100 : null;
+  const saldo  = meta !== null ? meta - total : null;
+  const cmvReal = fat && fat > 0 ? (total / fat * 100) : null;
+  const progPct = meta ? Math.min(total / meta * 100, 100) : 0;
+  const monthly = calcMonthlyAvg();
+
+  let barColor = '#22c55e';
+  if (progPct >= 100) barColor = '#ef4444';
+  else if (progPct >= 80) barColor = '#f59e0b';
+
+  const actionBtns = `
+    <div class="cmv-panel-actions">
+      <button class="cmv-panel-btn-foto" onclick="openCameraForNF()">📷 Foto NF</button>
+      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openCMVConfig()">⚙ Configurar</button>` : ''}
+    </div>`;
+
+  const notasHtml = notas.length
+    ? notas.map(n => `
+        <div class="cmv-panel-nota">
+          <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
+          <span class="cmv-panel-nota-data">${n.data || ''}</span>
+          <span class="cmv-panel-nota-val">R$ ${fmt(n.valor)}</span>
+          <button class="cmv-nota-del" onclick="deleteNota('${n.id}')">✕</button>
+        </div>`).join('')
+    : `<p class="cmv-panel-notas-vazio">Nenhuma nota inserida nesta semana</p>`;
+
+  panel.innerHTML = `
+    <div class="cmv-panel-header">
+      <div class="cmv-panel-title-row">
+        <span class="cmv-panel-week-label">CMV — Semana ${state.semana}</span>
+        ${cmvReal !== null ? `<span class="cmv-panel-cmvpct" style="color:${barColor}">${cmvReal.toFixed(1)}%</span>` : ''}
+        ${monthly ? `<span class="cmv-panel-media-badge">Mês: ${monthly.avg.toFixed(1)}%</span>` : ''}
+      </div>
+      ${actionBtns}
+    </div>
+
+    ${fat ? `
+      <div class="cmv-panel-bar-wrap">
+        <div class="cmv-panel-bar-bg">
+          <div class="cmv-panel-bar-fill" style="width:${progPct.toFixed(1)}%;background:${barColor}"></div>
+        </div>
+        <span class="cmv-panel-barpct" style="color:${barColor}">${progPct.toFixed(0)}%</span>
+      </div>
+      <div class="cmv-panel-metrics">
+        <div class="cmv-panel-metric">
+          <span class="cmv-panel-metric-label">Gasto</span>
+          <span class="cmv-panel-metric-val">R$ ${fmt(total)}</span>
+        </div>
+        <div class="cmv-panel-metric">
+          <span class="cmv-panel-metric-label">Meta (${pct}%)</span>
+          <span class="cmv-panel-metric-val">R$ ${fmt(meta)}</span>
+        </div>
+        <div class="cmv-panel-metric">
+          <span class="cmv-panel-metric-label">${saldo >= 0 ? 'Saldo' : 'Excesso'}</span>
+          <span class="cmv-panel-metric-val" style="color:${saldo >= 0 ? '#4ade80' : '#f87171'}">${saldo >= 0 ? '' : '−'}R$ ${fmt(Math.abs(saldo))}</span>
+        </div>
+        <div class="cmv-panel-metric">
+          <span class="cmv-panel-metric-label">Faturamento</span>
+          <span class="cmv-panel-metric-val">R$ ${fmt(fat)}</span>
+        </div>
+      </div>
+    ` : `
+      <div class="cmv-panel-uncfg">
+        ${IS_ADMIN ? `<span>Configure o faturamento para ver o CMV desta semana</span>` : `<span>CMV ainda não configurado para esta semana</span>`}
+        ${monthly ? `<span class="cmv-panel-media-inline"> · Média mês: <strong>${monthly.avg.toFixed(1)}%</strong> (${monthly.weeks} sem.)</span>` : ''}
+      </div>
+    `}
+
+    <div class="cmv-panel-notas-section">
+      <div class="cmv-panel-notas-header">
+        Notas Fiscais · ${notas.length} nota${notas.length !== 1 ? 's' : ''} · Total: R$ ${fmt(total)}
+      </div>
+      <div class="cmv-panel-notas-list">${notasHtml}</div>
+    </div>
+  `;
+}
+
+// ── Start ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', init);
