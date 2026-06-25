@@ -711,6 +711,7 @@ function onFieldChange(sectionKey, itemName, field, rawValue) {
     state.data[sectionKey][weekKey][itemName][field] = val;
   }
 
+  state.lastCountDate = new Date().toISOString();
   const id = makeId(sectionKey, itemName);
   updateConsumption(id);
   updateCardFilled(id);
