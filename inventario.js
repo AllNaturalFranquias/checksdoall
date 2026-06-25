@@ -2153,12 +2153,18 @@ async function testGeminiKey() {
       label = 'Bearer';
     }
     const text = await resp.text();
+    const d = document.getElementById('geminiKeyTestResult');
+    d.style.display = 'block';
     if (resp.ok) {
-      showToast(`✅ Chave OK (${label})`);
+      d.style.background = '#f0fdf4';
+      d.style.borderColor = '#86efac';
+      d.style.color = '#14532d';
+      d.textContent = `✅ Chave OK (autenticou via ${label})`;
     } else {
-      const d = document.getElementById('geminiKeyTestResult');
-      d.textContent = `${resp.status} via ${label}: ${text.slice(0,300)}`;
-      d.style.display = 'block';
+      d.style.background = '#fef2f2';
+      d.style.borderColor = '#fca5a5';
+      d.style.color = '#7f1d1d';
+      d.textContent = `❌ ${resp.status} via ${label}:\n${text.slice(0,400)}`;
     }
   } catch(e) {
     showToast('Erro de rede: ' + e.message);
