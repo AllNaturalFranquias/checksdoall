@@ -1506,3 +1506,66 @@ body {
   color: rgba(255,255,255,0.25);
   text-align: center;
 }
+
+/* ── Linha de produto na nota ── */
+.cmv-panel-nota-linha {
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  font-weight: 500;
+}
+
+/* ── Select de linha nos modais ── */
+.inv-select-linha {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  background: #fff;
+  color: #1e293b;
+  appearance: auto;
+}
+
+/* ── Breakdown por linha no CMV ── */
+.cmv-linhas-breakdown {
+  padding: 10px 14px 4px;
+  border-top: 1px solid rgba(255,255,255,.1);
+}
+.cmv-linhas-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255,255,255,.4);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 6px;
+}
+.cmv-linha-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.cmv-linha-nome {
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255,255,255,.75);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmv-linha-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,.85);
+  min-width: 70px;
+  text-align: right;
+}
+.cmv-linha-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fbbf24;
+  min-width: 40px;
+  text-align: right;
+}
