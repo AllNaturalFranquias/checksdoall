@@ -2089,13 +2089,15 @@ function renderCMVPanel() {
       </div>
     `}
 
-    ${linhaBreakdownHtml}
-
     <div class="cmv-panel-notas-section">
-      <div class="cmv-panel-notas-header">
-        Notas Fiscais · ${notas.length} nota${notas.length !== 1 ? 's' : ''} · Total: R$ ${fmt(total)}
+      <button class="cmv-notas-toggle" onclick="toggleNotasDrawer(this)">
+        📋 ${notas.length} nota${notas.length !== 1 ? 's' : ''} · R$ ${fmt(total)}
+        <span class="cmv-notas-toggle-icon">▾</span>
+      </button>
+      <div class="cmv-notas-drawer" style="display:none">
+        ${linhaBreakdownHtml}
+        <div class="cmv-panel-notas-list">${notasHtml}</div>
       </div>
-      <div class="cmv-panel-notas-list">${notasHtml}</div>
     </div>
   `;
 }
@@ -2117,6 +2119,13 @@ async function saveGeminiKey() {
   document.getElementById('invGeminiKeyOverlay').classList.remove('open');
   renderCMVPanel();
   showToast('Chave Gemini salva ✓');
+}
+
+function toggleNotasDrawer(btn) {
+  const drawer = btn.nextElementSibling;
+  const open   = drawer.style.display !== 'none';
+  drawer.style.display = open ? 'none' : 'block';
+  btn.querySelector('.cmv-notas-toggle-icon').textContent = open ? '▾' : '▴';
 }
 
 function closeGeminiKeyModal() {
