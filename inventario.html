@@ -198,8 +198,12 @@
                autocomplete="off" style="font-size:13px;font-family:monospace"
                onkeydown="if(event.key==='Enter')saveGeminiKey()">
       </div>
-      <button class="inv-modal-btn" onclick="saveGeminiKey()">Salvar Chave</button>
-      <button class="inv-modal-cancel" onclick="closeGeminiKeyModal()">Cancelar</button>
+      <div id="geminiKeyTestResult" style="display:none;margin:8px 0;padding:10px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:11px;font-family:monospace;color:#7f1d1d;word-break:break-all;white-space:pre-wrap"></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button id="btnTestGeminiKey" class="inv-modal-cancel" style="flex:1" onclick="testGeminiKey()">🔍 Testar chave</button>
+        <button class="inv-modal-btn" style="flex:1" onclick="saveGeminiKey()">Salvar Chave</button>
+      </div>
+      <button class="inv-modal-cancel" onclick="closeGeminiKeyModal()" style="margin-top:8px">Cancelar</button>
     </div>
   </div>
 
