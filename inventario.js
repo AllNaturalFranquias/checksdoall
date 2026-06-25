@@ -943,7 +943,51 @@ function updateAllBadges() {
 }
 
 // ── Navegação de abas ─────────────────────────────────────────
+function filterInventory(q) {
+  const query = q.toLowerCase().trim();
+  const clearBtn = document.getElementById('invSearchClear');
+  if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
+
+  document.querySelectorAll('#invSections .inv-item').forEach(card => {
+    const name = (card.querySelector('.inv-item-name')?.textContent || '').toLowerCase();
+    card.style.display = (!query || name.includes(query)) ? '' : 'none';
+  });
+
+  // Mostra/esconde títulos de grupo sem itens visíveis
+  document.querySelectorAll('#invSections .inv-section').forEach(sec => {
+    sec.querySelectorAll('.inv-section-title').forEach(title => {
+      if (!query) { title.style.display = ''; return; }
+      let sib = title.nextElementSibling;
+      let hasVisible = false;
+      while (sib && !sib.classList.contains('inv-section-title')) {
+        if (sib.classList.contains('inv-item') && sib.style.display !== 'none') hasVisible = true;
+        sib = sib.nextElementSibling;
+      }
+      title.style.display = hasVisible ? '' : 'none';
+    });
+  });
+
+  // Se pesquisando, mostra todas as sections; se não, volta à tab ativa
+  if (query) {
+    document.querySelectorAll('.inv-section').forEach(s => {
+      if (s.id !== 'sec_CMV' && s.id !== 'sec_RESUMO') s.classList.add('active');
+    });
+  } else {
+    const activeTab = document.querySelector('.inv-tab.active');
+    if (activeTab) switchTab(activeTab.dataset.key);
+  }
+}
+
+function clearInventorySearch() {
+  const inp = document.getElementById('invSearch');
+  if (inp) { inp.value = ''; filterInventory(''); inp.focus(); }
+}
+
 function switchTab(key) {
+  // Limpa pesquisa ao trocar de tab
+  const inp = document.getElementById('invSearch');
+  if (inp && inp.value) { inp.value = ''; filterInventory(''); }
+
   document.querySelectorAll('.inv-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.key === key);
   });
