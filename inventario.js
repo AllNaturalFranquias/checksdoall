@@ -6,9 +6,33 @@ const SUPABASE_URL = 'https://nhuotdwfzowydrjeyttc.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5odW90ZHdmem93eWRyamV5dHRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTM2NDAsImV4cCI6MjA5NTk4OTY0MH0.JovSWvkJ5OdX1tauz7sYOuyDIm1Mbcx5gJF8Zb20oe4';
 const SUPABASE_CONFIGURED = !SUPABASE_URL.includes('COLE');
 
-// ── Gemini (chave armazenada localmente, nunca no código) ─────
+// ── Gemini (chave no Supabase — nunca no código) ──────────────
 function getGeminiKey() { return localStorage.getItem('gemini_api_key') || ''; }
 function setGeminiKey(k) { localStorage.setItem('gemini_api_key', k.trim()); }
+
+async function loadGeminiKey() {
+  if (getGeminiKey()) return; // já tem no dispositivo
+  if (!SUPABASE_CONFIGURED) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.config_gemini&select=estado`,
+      { headers: supabaseHeaders() }
+    );
+    const rows = await res.json();
+    const key = rows?.[0]?.estado?.key;
+    if (key) setGeminiKey(key);
+  } catch(e) {}
+}
+
+async function saveGeminiKeyToCloud(key) {
+  if (!SUPABASE_CONFIGURED) return;
+  const body = JSON.stringify({ chave: 'config_gemini', estado: { key } });
+  await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+    body
+  });
+}
 
 // ── Unidade (via URL ?u=batel) ────────────────────────────────
 const UNIT_ID    = new URLSearchParams(location.search).get('u') || 'batel';
@@ -484,8 +508,8 @@ async function init() {
 
   loadState();
   updateCloudStatus('sync');
+  await loadGeminiKey();
 
-  // Carregar config de itens da unidade antes de montar telas
   await loadUnitConfig();
   applyUnitConfig();
 
@@ -1954,11 +1978,13 @@ function openGeminiKeyModal() {
   setTimeout(() => document.getElementById('geminiKeyInput').focus(), 100);
 }
 
-function saveGeminiKey() {
+async function saveGeminiKey() {
   const val = document.getElementById('geminiKeyInput').value.trim();
   if (!val) { document.getElementById('geminiKeyInput').classList.add('error'); return; }
   setGeminiKey(val);
+  await saveGeminiKeyToCloud(val);
   document.getElementById('invGeminiKeyOverlay').classList.remove('open');
+  renderCMVPanel();
   showToast('Chave Gemini salva ✓');
 }
 
