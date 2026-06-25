@@ -1378,17 +1378,56 @@ body {
 
 .cmv-panel-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
 .cmv-panel-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cmv-kpis-row {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  background: rgba(0,0,0,0.15);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.cmv-kpi-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px 8px;
+  gap: 2px;
+}
+.cmv-kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: rgba(255,255,255,0.5);
+}
+.cmv-kpi-value {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.cmv-kpi-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+  line-height: 1.3;
+}
+.cmv-kpi-divider {
+  width: 1px;
+  background: rgba(255,255,255,0.12);
+  margin: 8px 0;
 }
 
 .cmv-panel-week-label {
