@@ -46,10 +46,16 @@
 
     <!-- Trocar PIN -->
     <div class="inv-modal" id="changePinContent" style="display:none">
-      <h2>Trocar PIN</h2>
-      <p style="font-size:13px;color:#666;margin-bottom:16px">Escolha um PIN de 4 dígitos</p>
+      <h2>Personalizar acesso</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:16px">Defina seu nome e PIN pessoal</p>
       <div class="nota-field">
-        <label>Novo PIN</label>
+        <label>Seu nome</label>
+        <input id="newNome" type="text" placeholder="Ex: Bruna" autocomplete="off"
+               style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-family:inherit;font-size:15px"
+               onkeydown="if(event.key==='Enter')document.getElementById('newPin1').focus()">
+      </div>
+      <div class="nota-field" style="margin-top:10px">
+        <label>Novo PIN (4 dígitos)</label>
         <input class="inv-pin-input" id="newPin1" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off">
       </div>
       <div class="nota-field" style="margin-top:10px">
@@ -58,8 +64,8 @@
                onkeydown="if(event.key==='Enter')saveNewPin()">
       </div>
       <p id="pinChangeError" style="color:#e11d48;font-size:12px;min-height:18px;margin-top:6px"></p>
-      <button class="inv-modal-btn" onclick="saveNewPin()">Salvar novo PIN</button>
-      <button class="inv-modal-cancel" onclick="doRedirect()">Cancelar e entrar</button>
+      <button class="inv-modal-btn" onclick="saveNewPin()">Salvar</button>
+      <button class="inv-modal-cancel" onclick="doRedirect()">Agora não</button>
     </div>
   </div>
 
@@ -157,23 +163,29 @@
     }
 
     async function saveNewPin() {
-      const p1 = document.getElementById('newPin1').value;
-      const p2 = document.getElementById('newPin2').value;
-      const err = document.getElementById('pinChangeError');
+      const nome = document.getElementById('newNome').value.trim();
+      const p1   = document.getElementById('newPin1').value;
+      const p2   = document.getElementById('newPin2').value;
+      const err  = document.getElementById('pinChangeError');
 
+      if (!nome)   { err.textContent = 'Digite seu nome'; return; }
       if (p1.length < 4) { err.textContent = 'PIN deve ter 4 dígitos'; return; }
       if (p1 !== p2)     { err.textContent = 'Os PINs não coincidem'; return; }
       if (!/^\d{4}$/.test(p1)) { err.textContent = 'Use apenas números'; return; }
 
-      // Atualiza o PIN do admin logado
+      // Atualiza nome e PIN do admin logado
       const admins = UNIT_ADMINS[selectedUnit] || [];
       const idx = admins.findIndex(a => a.nome === loggedAdmin.nome);
-      if (idx !== -1) admins[idx].pin = p1;
+      if (idx !== -1) { admins[idx].pin = p1; admins[idx].nome = nome; }
+
+      // Atualiza sessão com novo nome
+      const session = JSON.parse(sessionStorage.getItem('inv_session') || '{}');
+      session.nome = nome;
+      sessionStorage.setItem('inv_session', JSON.stringify(session));
 
       await savePins();
-      err.textContent = '';
       err.style.color = '#16a34a';
-      err.textContent = 'PIN alterado com sucesso!';
+      err.textContent = `Olá, ${nome}! PIN salvo ✓`;
       setTimeout(doRedirect, 1200);
     }
 
