@@ -192,8 +192,18 @@
         }
       }
 
+      // Breakdown por linha (todas as semanas)
+      const linhaMap = {};
+      for (const wk of weeks) {
+        for (const n of wk.notas) {
+          const l = n.linha || 'Outros';
+          linhaMap[l] = (linhaMap[l] || 0) + (n.valor || 0);
+        }
+      }
+      const linhas = Object.entries(linhaMap).sort((a,b) => b[1]-a[1]);
+
       return { weeks, monthReal, monthMeta, monthCount, monthFat, monthGasto,
-               lastNF, lastCount: data?.lastCountDate || null };
+               lastNF, lastCount: data?.lastCountDate || null, linhas };
     }
 
     /* ── Card de unidade ── */
@@ -260,6 +270,15 @@
             <div class="r-weeks-title">Acompanhamento semanal</div>
             ${weeksHtml}
           </div>
+          ${m.linhas.length > 0 ? `
+          <div style="padding:8px 14px;border-top:1px solid #f1f5f9">
+            <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Por linha · acumulado mês</div>
+            ${m.linhas.map(([l,v]) => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
+                <span style="font-size:12px;color:#475569;font-weight:500">${l}</span>
+                <span style="font-size:12px;font-weight:700;color:#1e293b">R$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+              </div>`).join('')}
+          </div>` : ''}
           <div class="r-dates">
             <div class="r-date-chip ${nfChip}">
               <div class="r-date-label">Última NF</div>
