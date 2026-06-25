@@ -1728,8 +1728,16 @@ function setNFLoadingMsg(msg) {
   if (el) el.textContent = msg;
 }
 
+async function countdownWait(seconds) {
+  for (let s = seconds; s > 0; s--) {
+    setNFLoadingMsg(`Limite atingido — aguardando ${s}s para tentar novamente...`);
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  setNFLoadingMsg('Tentando novamente...');
+}
+
 async function callGemini(base64Data, mimeType, attempt = 1) {
-  const MAX_ATTEMPTS = 6;
+  const MAX_ATTEMPTS = 4;
   const prompt = `Você está lendo uma nota fiscal ou cupom fiscal brasileiro. Extraia os dados e retorne APENAS um JSON válido (sem markdown, sem explicação):
 {
   "fornecedor": "nome da empresa emitente",
@@ -1757,12 +1765,21 @@ Se não conseguir ler algum campo, use null. Retorne APENAS o JSON, sem texto ad
   );
 
   if (!resp.ok) {
-    if ((resp.status === 503 || resp.status === 429) && attempt < MAX_ATTEMPTS) {
-      const delay = Math.min(2000 * attempt, 16000); // 2s, 4s, 8s, 16s, 16s
-      setNFLoadingMsg(`Serviço ocupado, aguardando... (tentativa ${attempt}/${MAX_ATTEMPTS - 1})`);
-      await new Promise(r => setTimeout(r, delay));
-      setNFLoadingMsg('Lendo a nota com IA...');
-      return callGemini(base64Data, mimeType, attempt + 1);
+    if (attempt < MAX_ATTEMPTS) {
+      if (resp.status === 429) {
+        // Rate limit: respeita Retry-After ou aguarda 60s com countdown
+        const retryAfter = parseInt(resp.headers.get('Retry-After') || '0') || 60;
+        await countdownWait(retryAfter);
+        return callGemini(base64Data, mimeType, attempt + 1);
+      }
+      if (resp.status === 503) {
+        // Serviço indisponível: backoff menor
+        const delay = 5000 * attempt;
+        setNFLoadingMsg(`Serviço ocupado, aguardando ${delay/1000}s... (tentativa ${attempt}/${MAX_ATTEMPTS - 1})`);
+        await new Promise(r => setTimeout(r, delay));
+        setNFLoadingMsg('Lendo a nota com IA...');
+        return callGemini(base64Data, mimeType, attempt + 1);
+      }
     }
     const errText = await resp.text();
     throw new Error('Gemini ' + resp.status + ': ' + errText);
