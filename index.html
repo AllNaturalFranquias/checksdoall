@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Estoque — Acesso</title>
+  <title>Controles All</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="inventario.css">
 </head>
@@ -25,9 +25,9 @@
     <button class="login-resumo-btn" onclick="selectUnit('global')">📊 Painel Geral — Dono</button>
   </div>
 
-  <!-- PIN Modal -->
+  <!-- Modal: Login com PIN -->
   <div class="inv-overlay" id="pinOverlay">
-    <div class="inv-modal">
+    <div class="inv-modal" id="pinModalContent">
       <h2 id="pinTitle">Acesso</h2>
       <p id="pinSubtitle">Digite seu PIN para entrar</p>
       <input class="inv-pin-input" id="pinInput" type="password"
@@ -36,31 +36,87 @@
       <button class="inv-modal-btn" onclick="doLogin()">Entrar</button>
       <button class="inv-modal-cancel" onclick="cancelLogin()" style="color:#bbb;margin-top:4px">↩ Voltar</button>
     </div>
+
+    <!-- Pós-login: opção de trocar PIN -->
+    <div class="inv-modal" id="postLoginContent" style="display:none">
+      <h2 id="postLoginTitle">Bem-vindo!</h2>
+      <button class="inv-modal-btn" id="btnContinue" onclick="doRedirect()">Entrar no sistema</button>
+      <button class="inv-modal-cancel" onclick="showChangePIN()" style="margin-top:8px">🔑 Trocar meu PIN</button>
+    </div>
+
+    <!-- Trocar PIN -->
+    <div class="inv-modal" id="changePinContent" style="display:none">
+      <h2>Trocar PIN</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:16px">Escolha um PIN de 4 dígitos</p>
+      <div class="nota-field">
+        <label>Novo PIN</label>
+        <input class="inv-pin-input" id="newPin1" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off">
+      </div>
+      <div class="nota-field" style="margin-top:10px">
+        <label>Confirmar PIN</label>
+        <input class="inv-pin-input" id="newPin2" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off"
+               onkeydown="if(event.key==='Enter')saveNewPin()">
+      </div>
+      <p id="pinChangeError" style="color:#e11d48;font-size:12px;min-height:18px;margin-top:6px"></p>
+      <button class="inv-modal-btn" onclick="saveNewPin()">Salvar novo PIN</button>
+      <button class="inv-modal-cancel" onclick="doRedirect()">Cancelar e entrar</button>
+    </div>
   </div>
 
   <script>
-    // ── ATENÇÃO: mantenha estes PINs iguais aos do inventario.js ──
-    const UNIT_ADMINS = {
-      global:       [{ nome: 'Kauê',              pin: '1234' }],
-      batel:        [{ nome: 'Admin Batel 1',     pin: '1111' }, { nome: 'Admin Batel 2',     pin: '2222' }],
-      maringa:      [{ nome: 'Admin Maringá 1',   pin: '3333' }, { nome: 'Admin Maringá 2',   pin: '4444' }],
-      parkshopping: [{ nome: 'Admin Park 1',      pin: '5555' }, { nome: 'Admin Park 2',      pin: '6666' }],
-      bigorrilho:   [{ nome: 'Admin Bigo. 1',     pin: '7777' }, { nome: 'Admin Bigo. 2',     pin: '8888' }],
-      cascavel:     [{ nome: 'Admin Cascavel 1',  pin: '9999' }, { nome: 'Admin Cascavel 2',  pin: '0000' }],
+    const SUPABASE_URL = 'https://nhuotdwfzowydrjeyttc.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5odW90ZHdmem93eWRyamV5dHRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTM2NDAsImV4cCI6MjA5NTk4OTY0MH0.JovSWvkJ5OdX1tauz7sYOuyDIm1Mbcx5gJF8Zb20oe4';
+
+    // PINs padrão — carregados/substituídos pelo Supabase
+    let UNIT_ADMINS = {
+      global:       [{ nome: 'Kauê',       pin: '1234' }],
+      batel:        [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      maringa:      [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      parkshopping: [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      bigorrilho:   [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+      cascavel:     [{ nome: 'Admin 1',    pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
     };
     const UNIT_LABELS = {
-      batel: 'Batel', maringa: 'Maringá', parkshopping: 'Park Shopping',
-      bigorrilho: 'Bigorrilho', cascavel: 'Cascavel', global: 'Painel Geral'
+      batel:'Batel', maringa:'Maringá', parkshopping:'Park Shopping',
+      bigorrilho:'Bigorrilho', cascavel:'Cascavel', global:'Painel Geral'
     };
 
     let selectedUnit = null;
+    let loggedAdmin  = null;
+
+    // Carrega PINs do Supabase
+    async function loadPins() {
+      try {
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.config_pins&select=estado`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        );
+        const rows = await r.json();
+        if (rows?.[0]?.estado) Object.assign(UNIT_ADMINS, rows[0].estado);
+      } catch(e) {}
+    }
+
+    async function savePins() {
+      const body = JSON.stringify({ chave: 'config_pins', estado: UNIT_ADMINS });
+      await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates'
+        },
+        body
+      });
+    }
+
+    loadPins();
 
     function selectUnit(unit) {
       selectedUnit = unit;
       document.getElementById('pinTitle').textContent = UNIT_LABELS[unit] || unit;
-      document.getElementById('pinSubtitle').textContent = 'Digite o PIN para entrar como admin';
+      document.getElementById('pinSubtitle').textContent = 'Digite seu PIN para entrar';
       document.getElementById('pinInput').value = '';
       document.getElementById('pinInput').classList.remove('error');
+      showModal('pinModalContent');
       document.getElementById('pinOverlay').classList.add('open');
       setTimeout(() => document.getElementById('pinInput').focus(), 100);
     }
@@ -71,14 +127,14 @@
       const admin  = admins.find(a => a.pin === pin);
 
       if (admin) {
+        loggedAdmin = admin;
         const isGlobal = selectedUnit === 'global';
         sessionStorage.setItem('inv_session', JSON.stringify({
-          nome:    admin.nome,
-          unidade: isGlobal ? null : selectedUnit,
-          isAdmin: true,
-          isGlobal
+          nome: admin.nome, unidade: isGlobal ? null : selectedUnit,
+          isAdmin: true, isGlobal
         }));
-        window.location.href = isGlobal ? 'resumo.html' : 'inventario.html?u=' + selectedUnit;
+        document.getElementById('postLoginTitle').textContent = `Olá, ${admin.nome}!`;
+        showModal('postLoginContent');
       } else {
         const inp = document.getElementById('pinInput');
         inp.classList.add('error');
@@ -87,9 +143,50 @@
       }
     }
 
+    function doRedirect() {
+      const isGlobal = selectedUnit === 'global';
+      window.location.href = isGlobal ? 'resumo.html' : 'inventario.html?u=' + selectedUnit;
+    }
+
+    function showChangePIN() {
+      document.getElementById('newPin1').value = '';
+      document.getElementById('newPin2').value = '';
+      document.getElementById('pinChangeError').textContent = '';
+      showModal('changePinContent');
+      setTimeout(() => document.getElementById('newPin1').focus(), 100);
+    }
+
+    async function saveNewPin() {
+      const p1 = document.getElementById('newPin1').value;
+      const p2 = document.getElementById('newPin2').value;
+      const err = document.getElementById('pinChangeError');
+
+      if (p1.length < 4) { err.textContent = 'PIN deve ter 4 dígitos'; return; }
+      if (p1 !== p2)     { err.textContent = 'Os PINs não coincidem'; return; }
+      if (!/^\d{4}$/.test(p1)) { err.textContent = 'Use apenas números'; return; }
+
+      // Atualiza o PIN do admin logado
+      const admins = UNIT_ADMINS[selectedUnit] || [];
+      const idx = admins.findIndex(a => a.nome === loggedAdmin.nome);
+      if (idx !== -1) admins[idx].pin = p1;
+
+      await savePins();
+      err.textContent = '';
+      err.style.color = '#16a34a';
+      err.textContent = 'PIN alterado com sucesso!';
+      setTimeout(doRedirect, 1200);
+    }
+
     function cancelLogin() {
       document.getElementById('pinOverlay').classList.remove('open');
       selectedUnit = null;
+      loggedAdmin  = null;
+    }
+
+    function showModal(id) {
+      ['pinModalContent','postLoginContent','changePinContent'].forEach(m => {
+        document.getElementById(m).style.display = m === id ? 'block' : 'none';
+      });
     }
   </script>
 </body>
