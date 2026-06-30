@@ -640,7 +640,7 @@ function renderDashboard() {
   const lastCount = state.lastCountDate
     ? new Date(state.lastCountDate).toLocaleDateString('pt-BR') : '—';
 
-  el.innerHTML = `
+  try { el.innerHTML = `
     <div class="dash-header">
       <div class="dash-unit">${UNIT_NAME}</div>
       <div class="dash-week">${getWeekLabel(state.semana)}</div>
@@ -685,7 +685,7 @@ function renderDashboard() {
         <span class="dash-metric-val">${notas.length} nota${notas.length !== 1 ? 's' : ''} →</span>
       </div>
     </div>
-  `;
+  `; } catch(e) { el.innerHTML = '<p style="padding:20px;color:red;font-size:13px">Erro dashboard: ' + e.message + '</p>'; }
 }
 
 function renderConfigView() {
