@@ -573,6 +573,11 @@ async function init() {
   updateAllBadges();
   updateWeekNav();
   await loadFromCloud();
+  // Corrige semana novamente caso cloud tenha sobrescrito com formato antigo
+  if (!state.semana || !/^\d{4}-W\d{2}$/.test(String(state.semana))) {
+    state.semana = getWeekKey();
+  }
+  updateWeekNav();
   switchView('dashboard');
 }
 
