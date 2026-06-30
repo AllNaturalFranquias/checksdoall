@@ -1432,9 +1432,7 @@ function openCMVConfig() {
   window._pinCallback = () => {
     const d = getCMVData();
     const sem = state.semana;
-    const _pm = getWeekMonday(sem); _pm.setDate(_pm.getDate()-7);
-    const semRef = getWeekLabel(getWeekKey(_pm));
-    document.getElementById('cmvConfigSemRef').textContent = `Faturamento de ${semRef} — meta para ${getWeekLabel(sem)}`;
+    document.getElementById('cmvConfigSemRef').textContent = `Semana ${getWeekLabel(sem)}`;
     document.getElementById('cmvFaturamento').value = d.faturamento != null ? d.faturamento : '';
     document.getElementById('cmvMetaPct').value = d.meta_pct || 30;
     updateCMVConfigResult();
