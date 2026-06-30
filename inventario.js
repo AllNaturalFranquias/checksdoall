@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 // ── Configuração Supabase ─────────────────────────────────────
 // Cole aqui as credenciais do seu projeto Supabase
@@ -465,65 +465,59 @@ let state = {
 };
 
 // ── Calendário de semanas ─────────────────────────────────────
-function mesAtualKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+// ── Semanas ISO (Segunda a Domingo) ──────────────────────────
+function getISOWeekNum(d) {
+  const date = new Date(d);
+  date.setHours(0,0,0,0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 }
 
-function getCurrentWeek() {
-  return Math.min(Math.ceil(new Date().getDate() / 7), 4);
+function getWeekKey(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1); // vai para segunda-feira
+  return `${d.getFullYear()}-W${String(getISOWeekNum(d)).padStart(2, '0')}`;
 }
 
-function getWeekRange(w) {
-  const now   = new Date();
-  const year  = now.getFullYear();
-  const month = now.getMonth();
-  const start = (w - 1) * 7 + 1;
-  const end   = w === 4 ? new Date(year, month + 1, 0).getDate() : w * 7;
-  const m     = String(month + 1).padStart(2, '0');
-  return `${String(start).padStart(2, '0')}–${String(end).padStart(2, '0')}/${m}`;
+function getWeekMonday(weekKey) {
+  const [yr, wStr] = weekKey.split('-W');
+  const week = parseInt(wStr);
+  const jan4 = new Date(parseInt(yr), 0, 4);
+  const jan4Day = jan4.getDay() || 7;
+  const week1Mon = new Date(jan4 - (jan4Day - 1) * 86400000);
+  return new Date(week1Mon.getTime() + (week - 1) * 7 * 86400000);
 }
 
-function getMesLabel() {
-  return new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+function getWeekLabel(weekKey) {
+  const mon = getWeekMonday(weekKey);
+  const sun = new Date(mon.getTime() + 6 * 86400000);
+  const f = d => d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
+  return `${f(mon)} – ${f(sun)}`;
 }
 
-function checkMonthChange() {
-  const hoje = mesAtualKey();
-  if (!state.mesAtual) {
-    state.mesAtual = hoje;
-    return;
-  }
-  if (state.mesAtual === hoje) return;
+function prevWeek() {
+  const mon = getWeekMonday(state.semana);
+  mon.setDate(mon.getDate() - 7);
+  switchWeek(getWeekKey(mon));
+}
 
-  // Novo mês detectado
-  const [ano, mes] = hoje.split('-');
-  const nomeMes = new Date(Number(ano), Number(mes) - 1, 1)
-    .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-
-  if (confirm(`Novo mês detectado: ${nomeMes}.\n\nDeseja iniciar um novo ciclo? Os dados atuais serão arquivados e as semanas serão zeradas.\n\nClique em OK para iniciar ${nomeMes}.`)) {
-    // Arquiva dados do mês anterior no estado
-    state.historico = state.historico || {};
-    state.historico[state.mesAtual] = {
-      data:     state.data,
-      cmv:      state.cmv,
-      cotacoes: state.cotacoes,
-    };
-    // Zera para o novo mês
-    state.data     = {};
-    state.cmv      = {};
-    state.cotacoes = {};
-    state.semana   = getCurrentWeek();
-    state.mesAtual = hoje;
-    doSave();
-  }
+function nextWeek() {
+  const mon = getWeekMonday(state.semana);
+  mon.setDate(mon.getDate() + 7);
+  switchWeek(getWeekKey(mon));
 }
 
 // ── Helpers de cotação ────────────────────────────────────────
-// Semanas 1-2 = quinzena q1 | Semanas 3-4 = quinzena q2
-function getQuinzena(semana)      { return semana <= 2 ? 'q1' : 'q2'; }
+function getQuinzena(semana) {
+  if (typeof semana === 'string' && semana.includes('-W')) {
+    return parseInt(semana.split('-W')[1]) % 2 === 0 ? 'q2' : 'q1';
+  }
+  return semana <= 2 ? 'q1' : 'q2';
+}
 function getRefSemana(semana)     { return semana <= 2 ? 1 : 3; }
-function isCotacaoRequired(semana){ return false; } // preços vêm das NFs agora
+function isCotacaoRequired(semana){ return false; }
 
 function getItemPrice(sectionKey, itemName) {
   const q = getQuinzena(state.semana);
@@ -569,16 +563,15 @@ async function init() {
   await loadUnitConfig();
   applyUnitConfig();
 
-  // Auto-seleciona semana atual pelo calendário
-  checkMonthChange();
-  if (!state.mesAtual || state.mesAtual === mesAtualKey()) {
-    state.semana = getCurrentWeek();
+  // Garante semana ISO válida; migra formato antigo (1/2/3/4)
+  if (!state.semana || !/^\d{4}-W\d{2}$/.test(state.semana)) {
+    state.semana = getWeekKey(); // semana atual (segunda-feira desta semana)
   }
 
   buildTabs();
   buildSections();
   updateAllBadges();
-  updateWeekButtons();
+  updateWeekNav();
   await loadFromCloud();
   switchView('dashboard');
 }
@@ -621,19 +614,22 @@ function renderDashboard() {
     : cmvReal > pct * 1.1 ? '#ef4444'
     : cmvReal > pct       ? '#f59e0b' : '#22c55e';
 
+  const hoje = new Date();
+  const mesAtualNum = hoje.getFullYear() * 100 + (hoje.getMonth() + 1);
   let gastoYTD = 0, fatYTD = 0;
-  for (let w = 1; w <= 4; w++) {
-    const dw = (state.cmv || {})['semana_' + w];
-    if (!dw) continue;
+  Object.entries(state.cmv || {}).forEach(([key, dw]) => {
+    if (!/^\d{4}-W\d{2}$/.test(key)) return;
+    const mon = getWeekMonday(key);
+    if (mon.getFullYear() * 100 + (mon.getMonth() + 1) !== mesAtualNum) return;
     gastoYTD += (dw.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
     if (dw.faturamento > 0) fatYTD += dw.faturamento;
-  }
+  });
   const cmvYTD  = fatYTD > 0 ? gastoYTD / fatYTD * 100 : null;
   const ytdColor = cmvYTD == null ? '#9ca3af'
     : cmvYTD > pct * 1.1 ? '#ef4444'
     : cmvYTD > pct       ? '#f59e0b' : '#22c55e';
 
-  const allNotas = [1,2,3,4].flatMap(w => ((state.cmv||{})['semana_'+w]?.notas || []));
+  const allNotas = Object.values(state.cmv || {}).flatMap(d => d?.notas || []);
   const lastNota = allNotas.length
     ? allNotas[allNotas.length - 1].data || '—' : '—';
   const lastCount = state.lastCountDate
@@ -642,7 +638,7 @@ function renderDashboard() {
   el.innerHTML = `
     <div class="dash-header">
       <div class="dash-unit">${UNIT_NAME}</div>
-      <div class="dash-week">Semana ${state.semana}</div>
+      <div class="dash-week">${getWeekLabel(state.semana)}</div>
     </div>
     <div class="dash-kpis">
       <div class="dash-kpi">
@@ -851,7 +847,7 @@ function itemCard(sectionKey, item, id) {
 function restoreValues() {
   for (const section of SECTIONS) {
     if (section.key === 'RESUMO') continue;
-    const weekKey = 'semana_' + state.semana;
+    const weekKey = state.semana;
     const sData = (state.data[section.key] || {})[weekKey] || {};
 
     for (const g of section.groups) {
@@ -885,7 +881,7 @@ function restoreValues() {
 
 // ── Mudança de campo ──────────────────────────────────────────
 function onFieldChange(sectionKey, itemName, field, rawValue) {
-  const weekKey = 'semana_' + state.semana;
+  const weekKey = state.semana;
   if (!state.data[sectionKey]) state.data[sectionKey] = {};
   if (!state.data[sectionKey][weekKey]) state.data[sectionKey][weekKey] = {};
   if (!state.data[sectionKey][weekKey][itemName]) state.data[sectionKey][weekKey][itemName] = {};
@@ -1044,7 +1040,7 @@ function updateBadge(sectionKey) {
   const section = SECTIONS.find(s => s.key === sectionKey);
   if (!section || section.key === 'RESUMO') return;
 
-  const weekKey = 'semana_' + state.semana;
+  const weekKey = state.semana;
   const sData = (state.data[sectionKey] || {})[weekKey] || {};
 
   let filled = 0, total = 0;
@@ -1128,26 +1124,23 @@ function switchTab(key) {
 }
 
 // ── Semana ────────────────────────────────────────────────────
-function switchWeek(w) {
-  state.semana = w;
-  updateWeekButtons();
+function switchWeek(weekKey) {
+  state.semana = weekKey;
+  updateWeekNav();
   restoreValues();
   updateAllBadges();
   renderCMVPanel();
+  saveState();
   const dash = document.getElementById('view-dashboard');
   if (dash && dash.style.display !== 'none') renderDashboard();
 }
 
-function updateWeekButtons() {
-  document.querySelectorAll('.inv-week-btn, .inv-week-bar-inner .inv-week-btn').forEach(btn => {
-    const w = parseInt(btn.dataset.week);
-    btn.classList.toggle('active', w === state.semana);
-    btn.innerHTML = `<span style="font-weight:700">Sem ${w}</span><br><span style="font-size:10px;opacity:.75">${getWeekRange(w)}</span>`;
-  });
-  // Mostra mês no label se existir
+function updateWeekNav() {
   const label = document.getElementById('invWeekLabel');
-  if (label) label.textContent = getMesLabel();
+  if (label && state.semana) label.textContent = getWeekLabel(state.semana);
 }
+
+function updateWeekButtons() { updateWeekNav(); } // alias compat
 
 // ── PIN / Resumo ──────────────────────────────────────────────
 function checkPin() {
@@ -1181,7 +1174,7 @@ function renderResumo() {
   const container = document.getElementById('resumoContent');
 
   const cards = SECTIONS.filter(s => s.key !== 'RESUMO').map(section => {
-    const weekKey = 'semana_' + state.semana;
+    const weekKey = state.semana;
     const sData = (state.data[section.key] || {})[weekKey] || {};
     let filled = 0, total = 0, totalConsumo = 0, totalCusto = 0;
 
@@ -1218,11 +1211,11 @@ function renderResumo() {
   }).join('');
 
   container.innerHTML = `
-    <p class="inv-section-title" style="margin-bottom:16px">Semana ${state.semana} — Resumo Geral</p>
+    <p class="inv-section-title" style="margin-bottom:16px">${getWeekLabel(state.semana)} — Resumo Geral</p>
     <div class="inv-resumo-cards">${cards}</div>
     <div class="inv-resumo-actions">
-      <button class="inv-btn inv-btn-primary" onclick="exportCSV()">⬇ Exportar CSV — Semana ${state.semana}</button>
-      <button class="inv-btn inv-btn-danger" onclick="confirmClear()">Limpar dados — Semana ${state.semana}</button>
+      <button class="inv-btn inv-btn-primary" onclick="exportCSV()">⬇ Exportar CSV</button>
+      <button class="inv-btn inv-btn-danger" onclick="confirmClear()">Limpar dados da semana</button>
     </div>
     <div class="inv-footer">PIN: ${OWNER_PIN} · Dados salvos neste dispositivo</div>`;
 }
@@ -1265,7 +1258,7 @@ function toggleDetail(sectionKey) {
 // ── Exportar CSV ──────────────────────────────────────────────
 function exportCSV() {
   const rows = ['Secao,Item,Unidade,Semana,Preco,Inicial,Entradas,Final,Consumo,Custo'];
-  const weekKey = 'semana_' + state.semana;
+  const weekKey = state.semana;
 
   for (const section of SECTIONS) {
     if (section.key === 'RESUMO') continue;
@@ -1306,8 +1299,8 @@ function exportCSV() {
 }
 
 function confirmClear() {
-  if (confirm(`Tem certeza que quer apagar todos os dados da Semana ${state.semana}? Esta ação não pode ser desfeita.`)) {
-    const weekKey = 'semana_' + state.semana;
+  if (confirm(`Tem certeza que quer apagar todos os dados de ${getWeekLabel(state.semana)}? Esta ação não pode ser desfeita.`)) {
+    const weekKey = state.semana;
     for (const section of SECTIONS) {
       if (state.data[section.key]) {
         delete state.data[section.key][weekKey];
@@ -1317,13 +1310,13 @@ function confirmClear() {
     restoreValues();
     updateAllBadges();
     renderResumo();
-    showToast('Semana ' + state.semana + ' apagada');
+    showToast('Semana apagada');
   }
 }
 
 // ── CMV ───────────────────────────────────────────────────────
 function getCMVData() {
-  const key = 'semana_' + state.semana;
+  const key = state.semana;
   if (!state.cmv) state.cmv = {};
   if (!state.cmv[key]) state.cmv[key] = { faturamento: null, meta_pct: 30, notas: [] };
   return state.cmv[key];
@@ -1341,7 +1334,9 @@ function renderCMV() {
   const saldo  = meta !== null ? meta - total : null;
   const cmvReal = fat ? (total / fat * 100) : null;
   const progPct = meta ? Math.min(total / meta * 100, 100) : 0;
-  const semRef  = state.semana > 1 ? `Sem. ${state.semana - 1}` : 'semana anterior';
+  const _prevMon = getWeekMonday(state.semana);
+  _prevMon.setDate(_prevMon.getDate() - 7);
+  const semRef = getWeekLabel(getWeekKey(_prevMon));
 
   // Cor da barra
   let barColor = '#22c55e';
@@ -1417,7 +1412,7 @@ function renderCMV() {
     </div>`).join('') : `<p class="cmv-notas-vazio">Nenhuma nota inserida ainda</p>`;
 
   container.innerHTML = `
-    <p class="inv-section-title" style="margin-bottom:12px">CMV — Semana ${state.semana}</p>
+    <p class="inv-section-title" style="margin-bottom:12px">CMV — ${getWeekLabel(state.semana)}</p>
     ${configHtml}
     ${painelHtml}
     <div class="cmv-notas-header">
@@ -1437,8 +1432,9 @@ function openCMVConfig() {
   window._pinCallback = () => {
     const d = getCMVData();
     const sem = state.semana;
-    const semRef = sem > 1 ? `Sem. ${sem - 1}` : 'semana anterior';
-    document.getElementById('cmvConfigSemRef').textContent = `Faturamento da ${semRef} — meta para Sem. ${sem}`;
+    const _pm = getWeekMonday(sem); _pm.setDate(_pm.getDate()-7);
+    const semRef = getWeekLabel(getWeekKey(_pm));
+    document.getElementById('cmvConfigSemRef').textContent = `Faturamento de ${semRef} — meta para ${getWeekLabel(sem)}`;
     document.getElementById('cmvFaturamento').value = d.faturamento != null ? d.faturamento : '';
     document.getElementById('cmvMetaPct').value = d.meta_pct || 30;
     updateCMVConfigResult();
@@ -2362,23 +2358,25 @@ async function confirmNFItems() {
 
 function calcMonthlyAvg() {
   let sum = 0, count = 0;
-  for (let w = 1; w <= 4; w++) {
-    const key = 'semana_' + w;
-    const d = (state.cmv || {})[key];
+  const hoje = new Date();
+  const mesNum = hoje.getFullYear() * 100 + (hoje.getMonth() + 1);
+  Object.entries(state.cmv || {}).forEach(([key, d]) => {
+    if (!/^\d{4}-W\d{2}$/.test(key)) return;
+    const mon = getWeekMonday(key);
+    if (mon.getFullYear() * 100 + (mon.getMonth() + 1) !== mesNum) return;
     if (d && d.faturamento && d.faturamento > 0) {
       const total = (d.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
       sum += (total / d.faturamento) * 100;
       count++;
     }
-  }
+  });
   return count > 0 ? { avg: sum / count, weeks: count } : null;
 }
 
 function calcProjecao() {
   // Acumula todas as semanas com dados
   let gastoTotal = 0, fatTotal = 0, semCount = 0;
-  for (let w = 1; w <= 4; w++) {
-    const d = (state.cmv || {})['semana_' + w];
+  for (const [, d] of Object.entries(state.cmv || {})) {
     if (!d) continue;
     const gasto = (d.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
     if (gasto > 0 || (d.faturamento && d.faturamento > 0)) {
@@ -2454,14 +2452,17 @@ function renderCMVPanel() {
         </div>`).join('')}
     </div>` : '';
 
-  // CMV mês YTD = total gasto acumulado / total faturamento acumulado
+  // CMV mês YTD = total gasto acumulado / total faturamento acumulado (semanas do mês atual)
+  const _hoje = new Date();
+  const _mesNum = _hoje.getFullYear() * 100 + (_hoje.getMonth() + 1);
   let gastoYTD = 0, fatYTD = 0;
-  for (let w = 1; w <= 4; w++) {
-    const dw = (state.cmv || {})['semana_' + w];
-    if (!dw) continue;
+  Object.entries(state.cmv || {}).forEach(([key, dw]) => {
+    if (!/^\d{4}-W\d{2}$/.test(key)) return;
+    const mon = getWeekMonday(key);
+    if (mon.getFullYear() * 100 + (mon.getMonth() + 1) !== _mesNum) return;
     gastoYTD += (dw.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
     if (dw.faturamento > 0) fatYTD += dw.faturamento;
-  }
+  });
   const cmvYTD     = fatYTD > 0 ? gastoYTD / fatYTD * 100 : null;
   const ytdColor   = cmvYTD != null
     ? (cmvYTD > pct * 1.1 ? '#ef4444' : cmvYTD > pct ? '#f59e0b' : '#4ade80')
@@ -2470,7 +2471,7 @@ function renderCMVPanel() {
   panel.innerHTML = `
     <div class="cmv-panel-header">
       <div class="cmv-panel-title-row">
-        <span class="cmv-panel-week-label">Sem ${state.semana}</span>
+        <span class="cmv-panel-week-label">${getWeekLabel(state.semana)}</span>
         <div style="flex:1"></div>
         ${actionBtns.replace('<div class="cmv-panel-actions">', '<div class="cmv-panel-actions" style="margin-top:0">')}
       </div>
