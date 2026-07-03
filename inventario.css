@@ -1876,3 +1876,41 @@ body { padding-bottom: 62px; }
 .config-btn-danger { color: #dc2626; border-color: #fecaca; margin-top: 8px; }
 
 .inv-view { min-height: 60px; }
+
+/* Split nota modal */
+.split-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.split-linha-sel {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  background: #fff;
+}
+.split-val-inp {
+  width: 90px;
+  padding: 8px 8px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+.split-val-inp:focus, .split-linha-sel:focus { outline: none; border-color: #dc2626; }
+.cmv-nota-split {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+  flex-shrink: 0;
+}
+.cmv-nota-split:hover { color: #dc2626; }
