@@ -441,6 +441,48 @@ const BASE_SECTIONS = [
     ]
   },
   {
+    key: 'BEBIDAS',
+    label: 'BEBIDAS',
+    groups: [
+      {
+        group: 'Bebidas',
+        items: [
+          { name: 'Água Mineral 500ml', unit: 'cx' },
+          { name: 'Água Mineral 1,5L', unit: 'cx' },
+          { name: 'Refrigerante Lata', unit: 'cx' },
+          { name: 'Refrigerante PET 2L', unit: 'un' },
+          { name: 'Suco de Laranja Natural', unit: 'lt' },
+          { name: 'Suco de Caixinha', unit: 'cx' },
+          { name: 'Energético', unit: 'un' },
+          { name: 'Cerveja Lata', unit: 'cx' },
+          { name: 'Vinho', unit: 'un' },
+        ]
+      }
+    ]
+  },
+  {
+    key: 'FUNC_COMIDA',
+    label: 'FUNC.',
+    groups: [
+      {
+        group: 'Alimentação de Funcionários',
+        items: [
+          { name: 'Arroz', unit: 'kg' },
+          { name: 'Feijão', unit: 'kg' },
+          { name: 'Macarrão', unit: 'kg' },
+          { name: 'Óleo de Soja', unit: 'lt' },
+          { name: 'Sal', unit: 'kg' },
+          { name: 'Tempero Completo', unit: 'un' },
+          { name: 'Carne para Funcionários', unit: 'kg' },
+          { name: 'Frango para Funcionários', unit: 'kg' },
+          { name: 'Ovos', unit: 'dz' },
+          { name: 'Pão de Forma', unit: 'un' },
+          { name: 'Manteiga', unit: 'un' },
+        ]
+      }
+    ]
+  },
+  {
     key: 'CMV',
     label: 'CMV',
     groups: []
