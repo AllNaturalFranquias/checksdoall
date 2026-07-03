@@ -8,7 +8,7 @@
   <title>Controles Estoque</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="inventario.css?v=6">
+  <link rel="stylesheet" href="inventario.css?v=7">
 </head>
 <body>
 
@@ -339,6 +339,19 @@
     </button>
   </nav>
 
-  <script src="inventario.js?v=6"></script>
+  <!-- Modal: Dividir nota por linha -->
+  <div class="inv-overlay" id="invSplitNotaOverlay">
+    <div class="inv-modal">
+      <h2>Dividir Nota por Linha</h2>
+      <p id="splitNotaInfo" style="font-size:13px;color:#666;margin-bottom:16px"></p>
+      <div id="splitNotaRows"></div>
+      <button class="nf-add-item-btn" onclick="addSplitRow()" style="margin:8px 0">+ Adicionar linha</button>
+      <div id="splitNotaRestante" style="font-size:13px;font-weight:600;margin:8px 0;padding:8px;background:#f9fafb;border-radius:8px"></div>
+      <button class="inv-modal-btn" onclick="saveSplitNota()">Salvar</button>
+      <button class="inv-modal-cancel" onclick="closeSplitNota()">Cancelar</button>
+    </div>
+  </div>
+
+  <script src="inventario.js?v=7"></script>
 </body>
 </html>
