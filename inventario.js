@@ -2471,22 +2471,28 @@ function renderCMVPanel() {
     </div>`;
 
   const notasHtml = notas.length
-    ? notas.map(n => `
+    ? notas.map(n => {
+        const linhasDisplay = n.linhas?.length
+          ? n.linhas.map(l => `<span class="cmv-panel-nota-linha">${escHtml(l.linha)} R$ ${fmt(l.valor)}</span>`).join('')
+          : n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>` : '';
+        return `
         <div class="cmv-panel-nota">
-          <div style="display:flex;flex-direction:column;gap:1px;flex:1;min-width:0">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
             <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
-            ${n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>` : ''}
+            <div style="display:flex;flex-wrap:wrap;gap:4px">${linhasDisplay}</div>
           </div>
           <span class="cmv-panel-nota-data">${n.data || ''}</span>
           <span class="cmv-panel-nota-val">R$ ${fmt(n.valor)}</span>
+          <button class="cmv-nota-split" onclick="openSplitNota('${n.id}')" title="Dividir por linha">✂</button>
           <button class="cmv-nota-edit" onclick="openEditNota('${n.id}')" title="Editar">✏️</button>
           <button class="cmv-nota-del" onclick="deleteNota('${n.id}')">✕</button>
-        </div>`).join('')
+        </div>`;
+      }).join('')
     : `<p class="cmv-panel-notas-vazio">Nenhuma nota inserida nesta semana</p>`;
 
   // Breakdown por linha
   const breakdown = calcLinhaBreakdown(notas, fat);
-  const linhaBreakdownHtml = breakdown.length > 1 ? `
+  const linhaBreakdownHtml = breakdown.length > 0 ? `
     <div class="cmv-linhas-breakdown">
       <div class="cmv-linhas-title">Por linha de produto</div>
       ${breakdown.map(b => `
@@ -2706,16 +2712,35 @@ function populateLinhaSelect(selectId, fornecedor = '', items = []) {
   if (detected) sel.value = detected;
 }
 
+function normalizeForn(s) {
+  return s.toLowerCase().trim()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function autoFillLinha(selectId, fornecedor) {
   const sel = document.getElementById(selectId);
-  if (!sel || !fornecedor) return;
-  const known = linhasConfig.fornecedores[fornecedor.trim().toLowerCase()];
-  if (known) sel.value = known;
+  if (!sel || !fornecedor.trim()) return;
+  const norm = normalizeForn(fornecedor);
+  const known = linhasConfig.fornecedores || {};
+
+  // Busca exata primeiro
+  let linha = known[norm];
+
+  // Busca substring se não achou
+  if (!linha) {
+    for (const [key, val] of Object.entries(known)) {
+      if (norm.includes(key) || key.includes(norm)) { linha = val; break; }
+    }
+  }
+
+  if (linha && linhasConfig.linhas.includes(linha)) sel.value = linha;
 }
 
 function learnFornecedorLinha(fornecedor, linha) {
   if (!fornecedor || !linha) return;
-  linhasConfig.fornecedores[fornecedor.trim().toLowerCase()] = linha;
+  if (!linhasConfig.fornecedores) linhasConfig.fornecedores = {};
+  linhasConfig.fornecedores[normalizeForn(fornecedor)] = linha;
   saveLinhas();
 }
 
@@ -2771,10 +2796,19 @@ function refreshLinhaSelects() {
 function calcLinhaBreakdown(notas, faturamento) {
   const map = {};
   for (const n of notas) {
-    const l = n.linha || 'Outros';
-    map[l] = (map[l] || 0) + (n.valor || 0);
+    if (n.linhas && n.linhas.length) {
+      // nota dividida em múltiplas linhas
+      for (const entry of n.linhas) {
+        const l = entry.linha || 'Outros';
+        map[l] = (map[l] || 0) + (entry.valor || 0);
+      }
+    } else {
+      const l = n.linha || 'Outros';
+      map[l] = (map[l] || 0) + (n.valor || 0);
+    }
   }
   return Object.entries(map)
+    .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([linha, total]) => ({
       linha, total,
@@ -2831,6 +2865,115 @@ async function saveTrocarPin() {
   err.style.color = '#16a34a';
   err.textContent = `PIN salvo! Bem-vinda, ${nome} ✓`;
   setTimeout(closeTrocarPin, 1500);
+}
+
+// ── Split de nota por linha ───────────────────────────────────
+let _splitNotaId = null;
+
+function openSplitNota(id) {
+  const d = getCMVData();
+  const nota = (d.notas || []).find(n => n.id === id);
+  if (!nota) return;
+  _splitNotaId = id;
+
+  document.getElementById('splitNotaInfo').textContent =
+    `${nota.fornecedor} · ${nota.data || ''} · Total: R$ ${fmt(nota.valor)}`;
+
+  // Monta linhas existentes ou inicializa com a linha atual
+  const linhas = nota.linhas?.length
+    ? nota.linhas.map(l => ({...l}))
+    : [{ linha: nota.linha || '', valor: nota.valor || 0 }];
+
+  renderSplitRows(linhas, nota.valor);
+  document.getElementById('invSplitNotaOverlay').classList.add('open');
+}
+
+function renderSplitRows(linhas, total) {
+  const container = document.getElementById('splitNotaRows');
+  container.innerHTML = linhas.map((l, i) => `
+    <div class="split-row" data-idx="${i}">
+      <select class="split-linha-sel" onchange="updateSplitCalc()">
+        <option value="">— linha —</option>
+        ${linhasConfig.linhas.map(ln => `<option value="${escHtml(ln)}" ${l.linha === ln ? 'selected' : ''}>${escHtml(ln)}</option>`).join('')}
+      </select>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span style="font-size:12px;color:#6b7280">R$</span>
+        <input type="number" inputmode="decimal" class="split-val-inp" value="${l.valor || ''}" placeholder="0,00" step="0.01" oninput="updateSplitCalc()">
+      </div>
+      ${linhas.length > 1 ? `<button onclick="removeSplitRow(${i})" style="background:none;border:none;color:#9ca3af;font-size:16px;cursor:pointer;padding:4px">✕</button>` : ''}
+    </div>
+  `).join('');
+  updateSplitCalc();
+}
+
+function updateSplitCalc() {
+  const nota = (getCMVData().notas || []).find(n => n.id === _splitNotaId);
+  if (!nota) return;
+  const total = nota.valor || 0;
+  const rows = document.querySelectorAll('#splitNotaRows .split-row');
+  let soma = 0;
+  rows.forEach(row => {
+    const v = parseFloat(row.querySelector('.split-val-inp').value) || 0;
+    soma += v;
+  });
+  const restante = total - soma;
+  const el = document.getElementById('splitNotaRestante');
+  el.textContent = restante === 0 ? '✓ Distribuído corretamente'
+    : restante > 0 ? `Restam R$ ${fmt(restante)} para distribuir`
+    : `Excede em R$ ${fmt(Math.abs(restante))}`;
+  el.style.color = restante === 0 ? '#16a34a' : '#dc2626';
+}
+
+function addSplitRow() {
+  const nota = (getCMVData().notas || []).find(n => n.id === _splitNotaId);
+  if (!nota) return;
+  const current = getSplitRowsData();
+  const soma = current.reduce((s, r) => s + r.valor, 0);
+  const restante = (nota.valor || 0) - soma;
+  current.push({ linha: '', valor: restante > 0 ? Math.round(restante * 100) / 100 : 0 });
+  renderSplitRows(current, nota.valor);
+}
+
+function removeSplitRow(idx) {
+  const nota = (getCMVData().notas || []).find(n => n.id === _splitNotaId);
+  if (!nota) return;
+  const current = getSplitRowsData();
+  current.splice(idx, 1);
+  renderSplitRows(current, nota.valor);
+}
+
+function getSplitRowsData() {
+  const rows = document.querySelectorAll('#splitNotaRows .split-row');
+  return Array.from(rows).map(row => ({
+    linha: row.querySelector('.split-linha-sel').value,
+    valor: parseFloat(row.querySelector('.split-val-inp').value) || 0,
+  }));
+}
+
+function saveSplitNota() {
+  const d = getCMVData();
+  const nota = (d.notas || []).find(n => n.id === _splitNotaId);
+  if (!nota) return;
+  const rows = getSplitRowsData().filter(r => r.linha && r.valor > 0);
+  if (!rows.length) { showToast('Adicione ao menos uma linha com valor'); return; }
+  const soma = rows.reduce((s, r) => s + r.valor, 0);
+  if (Math.abs(soma - nota.valor) > 0.01) {
+    showToast('Total das linhas deve ser igual ao valor da nota'); return;
+  }
+  // Salva as linhas na nota
+  nota.linhas = rows;
+  delete nota.linha; // remove campo antigo
+  // Aprende mapeamento fornecedor → primeira linha
+  learnFornecedorLinha(nota.fornecedor, rows[0].linha);
+  doSave();
+  renderCMVPanel();
+  closeSplitNota();
+  showToast('Nota dividida ✓');
+}
+
+function closeSplitNota() {
+  _splitNotaId = null;
+  document.getElementById('invSplitNotaOverlay').classList.remove('open');
 }
 
 // ── Start ─────────────────────────────────────────────────────
