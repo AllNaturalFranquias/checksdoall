@@ -551,6 +551,12 @@ function nextWeek() {
   switchWeek(getWeekKey(mon));
 }
 
+function getNextWeekKey(weekKey) {
+  const mon = getWeekMonday(weekKey);
+  mon.setDate(mon.getDate() + 7);
+  return getWeekKey(mon);
+}
+
 // ── Helpers de cotação ────────────────────────────────────────
 function getQuinzena(semana) {
   if (typeof semana === 'string' && semana.includes('-W')) {
@@ -604,6 +610,7 @@ async function init() {
 
   await loadUnitConfig();
   applyUnitConfig();
+  initFichas();
 
   // Garante semana ISO válida; migra formato antigo (1/2/3/4)
   if (!state.semana || !/^\d{4}-W\d{2}$/.test(state.semana)) {
@@ -746,6 +753,7 @@ function renderConfigView() {
       <div class="config-section-title" style="margin-top:20px">CMV</div>
       <button class="config-btn" onclick="openCMVConfig()">⚙️ Faturamento e Meta CMV</button>
       <button class="config-btn" onclick="openLinhas()">📦 Linhas de produto</button>
+      <button class="config-btn" onclick="openFichas()">📋 Fichas Técnicas</button>
       <div class="config-section-title" style="margin-top:20px">Integrações</div>
       <button class="config-btn" onclick="openGeminiKeyModal()">🔑 Chave Gemini (IA)</button>
       <div class="config-section-title" style="margin-top:20px"></div>
@@ -806,27 +814,29 @@ function renderContagemDash() {
   if (!el) return;
 
   const weekKey = state.semana;
-  let totalAll = 0, filledAll = 0;
+  let totalAll = 0, startedAll = 0, completedAll = 0;
   const sectionStats = [];
 
   for (const section of SECTIONS) {
     if (section.key === 'RESUMO' || section.key === 'CMV') continue;
     const sData = (state.data[section.key] || {})[weekKey] || {};
-    let filled = 0, total = 0;
+    let started = 0, completed = 0, total = 0;
     for (const g of section.groups) {
       for (const item of g.items) {
         total++;
         const d = sData[item.name] || {};
-        if (d.i !== undefined && d.f !== undefined) filled++;
+        if (d.i !== undefined) started++;
+        if (d.i !== undefined && d.f !== undefined) completed++;
       }
     }
-    sectionStats.push({ key: section.key, label: section.label, filled, total });
+    sectionStats.push({ key: section.key, label: section.label, started, completed, total });
     totalAll += total;
-    filledAll += filled;
+    startedAll += started;
+    completedAll += completed;
   }
 
-  const pct     = totalAll > 0 ? Math.round(filledAll / totalAll * 100) : 0;
-  const missing = totalAll - filledAll;
+  const pct      = totalAll > 0 ? Math.round(startedAll / totalAll * 100) : 0;
+  const missing  = totalAll - startedAll;
   const pctColor = pct === 100 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#dc2626';
 
   const lastCount = state.lastCountDate
@@ -834,30 +844,37 @@ function renderContagemDash() {
     : null;
 
   const chipsHtml = sectionStats.map(s => {
-    const cls = (s.filled === s.total && s.total > 0) ? 'cntdash-chip-done'
-      : s.filled > 0 ? 'cntdash-chip-partial'
+    const cls = (s.completed === s.total && s.total > 0) ? 'cntdash-chip-done'
+      : s.started > 0 ? 'cntdash-chip-partial'
       : 'cntdash-chip-empty';
-    const icon = (s.filled === s.total && s.total > 0) ? '✓ ' : '';
-    return `<span class="cntdash-chip ${cls}" onclick="switchTab('${s.key}')">${icon}${escHtml(s.label)} <em>${s.filled}/${s.total}</em></span>`;
+    const icon = (s.completed === s.total && s.total > 0) ? '✓ ' : '';
+    return `<span class="cntdash-chip ${cls}" onclick="switchTab('${s.key}')">${icon}${escHtml(s.label)} <em>${s.started}/${s.total}</em></span>`;
   }).join('');
+
+  const completedPct = totalAll > 0 ? Math.round(completedAll / totalAll * 100) : 0;
 
   el.innerHTML = `
     <div class="cntdash-card">
       <div class="cntdash-top-row">
         <div class="cntdash-pct-block">
           <span class="cntdash-pct" style="color:${pctColor}">${pct}%</span>
-          <span class="cntdash-pct-sub">concluído</span>
+          <span class="cntdash-pct-sub">iniciado</span>
         </div>
         <div class="cntdash-info-block">
-          <span class="cntdash-counts">${filledAll} de ${totalAll} itens</span>
-          ${missing > 0
-            ? `<span class="cntdash-missing">${missing} item${missing !== 1 ? 'ns' : ''} pendente${missing !== 1 ? 's' : ''}</span>`
-            : `<span class="cntdash-done">Contagem completa ✓</span>`}
-          ${lastCount ? `<span class="cntdash-last">Última atualização: ${lastCount}</span>` : ''}
+          <span class="cntdash-counts">${startedAll} de ${totalAll} itens iniciados</span>
+          ${completedAll > 0 && completedAll < totalAll
+            ? `<span class="cntdash-missing">${completedAll} completos · ${totalAll - startedAll} pendentes</span>`
+            : completedAll === totalAll && totalAll > 0
+            ? `<span class="cntdash-done">Contagem completa ✓</span>`
+            : missing > 0
+            ? `<span class="cntdash-missing">${missing} item${missing !== 1 ? 'ns' : ''} sem inicial</span>`
+            : ''}
+          ${lastCount ? `<span class="cntdash-last">Últ. atualização: ${lastCount}</span>` : ''}
         </div>
       </div>
       <div class="cntdash-bar-bg">
         <div class="cntdash-bar-fill" style="width:${pct}%;background:${pctColor}"></div>
+        ${completedPct > 0 ? `<div class="cntdash-bar-complete" style="width:${completedPct}%"></div>` : ''}
       </div>
       <div class="cntdash-chips">${chipsHtml}</div>
     </div>`;
@@ -1004,6 +1021,17 @@ function onFieldChange(sectionKey, itemName, field, rawValue) {
     delete state.data[sectionKey][weekKey][itemName][field];
   } else {
     state.data[sectionKey][weekKey][itemName][field] = val;
+  }
+
+  // Quando Final é preenchido, propaga automaticamente como Inicial da semana seguinte
+  if (field === 'f' && val !== undefined) {
+    const nextKey = getNextWeekKey(weekKey);
+    if (!state.data[sectionKey][nextKey]) state.data[sectionKey][nextKey] = {};
+    if (!state.data[sectionKey][nextKey][itemName]) state.data[sectionKey][nextKey][itemName] = {};
+    // Só preenche se o Inicial da próxima semana ainda não foi tocado pelo usuário
+    if (state.data[sectionKey][nextKey][itemName].i === undefined) {
+      state.data[sectionKey][nextKey][itemName].i = val;
+    }
   }
 
   state.lastCountDate = new Date().toISOString();
@@ -2458,15 +2486,27 @@ async function confirmNFItems() {
   if (!state.precoSem[state.semana]) state.precoSem[state.semana] = {};
 
   let updatedPrices = 0;
+  const weekKey = state.semana;
   for (const item of included) {
-    if (item.match && item.preco_unitario > 0) {
-      const { sectionKey, itemName } = item.match;
+    if (!item.match) continue;
+    const { sectionKey, itemName } = item.match;
+
+    // Atualizar cotação (preço)
+    if (item.preco_unitario > 0) {
       if (!state.cotacoes[q][sectionKey]) state.cotacoes[q][sectionKey] = {};
       state.cotacoes[q][sectionKey][itemName] = item.preco_unitario;
-      // Histórico semanal para Comparativo
       if (!state.precoSem[state.semana][sectionKey]) state.precoSem[state.semana][sectionKey] = {};
       state.precoSem[state.semana][sectionKey][itemName] = item.preco_unitario;
       updatedPrices++;
+    }
+
+    // Somar quantidade da NF nas Entradas da semana
+    if (item.quantidade > 0) {
+      if (!state.data[sectionKey]) state.data[sectionKey] = {};
+      if (!state.data[sectionKey][weekKey]) state.data[sectionKey][weekKey] = {};
+      if (!state.data[sectionKey][weekKey][itemName]) state.data[sectionKey][weekKey][itemName] = {};
+      const prev = state.data[sectionKey][weekKey][itemName].e || 0;
+      state.data[sectionKey][weekKey][itemName].e = +(prev + item.quantidade).toFixed(4);
     }
   }
 
@@ -3323,6 +3363,218 @@ function renderComparativo() {
         <div class="comp-linhas-list">${linhaHtml}</div>
       </div>
     </div>`;
+}
+
+// ── Fichas Técnicas ───────────────────────────────────────────
+let fichasCurrentCat = 'all';
+let fichasSearchTerm = '';
+let fichasEditingId  = null;
+
+function initFichas() {
+  if (!state.fichas || state.fichas.length === 0) {
+    state.fichas = JSON.parse(JSON.stringify(FICHAS_DEFAULT));
+  }
+}
+
+function openFichas() {
+  const el = document.getElementById('fichasOverlay');
+  if (!el) return;
+  el.style.display = 'flex';
+  fichasCurrentCat = 'all';
+  fichasSearchTerm = '';
+  fichasEditingId  = null;
+  document.querySelectorAll('.fichas-catbtn').forEach(b => b.classList.remove('active'));
+  const all = document.querySelector('.fichas-catbtn[data-cat="all"]');
+  if (all) all.classList.add('active');
+  const si = document.querySelector('.fichas-search');
+  if (si) si.value = '';
+  showFichasList();
+}
+
+function closeFichas() {
+  const el = document.getElementById('fichasOverlay');
+  if (el) el.style.display = 'none';
+}
+
+function filterFichas(cat) {
+  fichasCurrentCat = cat;
+  document.querySelectorAll('.fichas-catbtn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`.fichas-catbtn[data-cat="${cat}"]`);
+  if (btn) btn.classList.add('active');
+  renderFichasList();
+}
+
+function searchFichas(term) {
+  fichasSearchTerm = term.toLowerCase();
+  renderFichasList();
+}
+
+function showFichasList() {
+  const lv = document.getElementById('fichasListView');
+  const ev = document.getElementById('fichasEditView');
+  if (lv) lv.style.display = '';
+  if (ev) ev.style.display = 'none';
+  renderFichasList();
+}
+
+function renderFichasList() {
+  const el = document.getElementById('fichasList');
+  if (!el) return;
+
+  let fichas = state.fichas || [];
+  if (fichasCurrentCat !== 'all') fichas = fichas.filter(f => f.cat === fichasCurrentCat);
+  if (fichasSearchTerm)           fichas = fichas.filter(f => f.nome.toLowerCase().includes(fichasSearchTerm));
+
+  const catLabel = { base:'Base', prato:'Prato', salada:'Salada', snack:'Snack',
+                     cafe:'Café', cafe_manha:'Café Manhã', suco:'Suco' };
+
+  if (!fichas.length) {
+    el.innerHTML = '<p class="fichas-empty">Nenhuma ficha encontrada</p>';
+    return;
+  }
+
+  el.innerHTML = fichas.map(f => `
+    <div class="fichas-card" onclick="showFichasEdit('${f.id}')">
+      <div class="fichas-card-nome">${escHtml(f.nome)}</div>
+      <div class="fichas-card-meta">
+        <span class="fichas-cat-badge fichas-cat-${f.cat}">${catLabel[f.cat] || f.cat}</span>
+        <span>${f.ing.length} ingredientes${f.rend ? ' · rend. ' + f.rend + 'g' : ''}</span>
+      </div>
+    </div>`).join('');
+}
+
+function showFichasEdit(id) {
+  fichasEditingId = id;
+  const lv = document.getElementById('fichasListView');
+  const ev = document.getElementById('fichasEditView');
+  if (lv) lv.style.display = 'none';
+  if (ev) ev.style.display = '';
+  renderFichasEditForm(id);
+}
+
+function getAllInventoryItems() {
+  const items = new Set();
+  for (const section of SECTIONS) {
+    if (section.key === 'RESUMO' || section.key === 'CMV') continue;
+    for (const g of section.groups) for (const item of g.items) items.add(item.name);
+  }
+  return [...items].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function renderFichasEditForm(id) {
+  const ficha = (state.fichas || []).find(f => f.id === id);
+  const el = document.getElementById('fichasEditContent');
+  if (!el || !ficha) return;
+
+  const allItems    = getAllInventoryItems();
+  const datalistHtml = allItems.map(i => `<option value="${escHtml(i)}">`).join('');
+
+  const unOpts = ['kg','g','litro','l','ml','un','caixa','mc','cx'].map(u =>
+    `<option value="${u}"${ficha.ing[0]?.u === u ? '' : ''}>${u}</option>`).join('');
+
+  const ingRows = ficha.ing.map((ing, idx) => `
+    <div class="fichas-ing-row">
+      <div class="fichas-ing-order">
+        ${idx > 0 ? `<button class="fichas-ord-btn" onclick="moveFichaIng('${id}',${idx},-1)">▲</button>` : '<span></span>'}
+        ${idx < ficha.ing.length - 1 ? `<button class="fichas-ord-btn" onclick="moveFichaIng('${id}',${idx},1)">▼</button>` : '<span></span>'}
+      </div>
+      <input class="fichas-ing-name" list="fichasIngList" value="${escHtml(ing.n)}"
+        onchange="updateFichaIng('${id}',${idx},'n',this.value)" placeholder="Ingrediente">
+      <input class="fichas-ing-qty" type="number" step="0.0001" value="${ing.q}"
+        onchange="updateFichaIng('${id}',${idx},'q',parseFloat(this.value)||0)" placeholder="Qtd">
+      <select class="fichas-ing-un" onchange="updateFichaIng('${id}',${idx},'u',this.value)">
+        ${['kg','g','litro','l','ml','un','caixa','mc','cx'].map(u =>
+          `<option value="${u}"${ing.u===u?' selected':''}>${u}</option>`).join('')}
+      </select>
+      <button class="fichas-ing-del" onclick="deleteFichaIng('${id}',${idx})">✕</button>
+    </div>`).join('');
+
+  const catOptions = [['base','Base'],['prato','Prato'],['salada','Salada'],['snack','Snack'],
+    ['cafe','Café'],['cafe_manha','Café Manhã'],['suco','Suco']].map(([v, l]) =>
+      `<option value="${v}"${ficha.cat===v?' selected':''}>${l}</option>`).join('');
+
+  el.innerHTML = `
+    <datalist id="fichasIngList">${datalistHtml}</datalist>
+    <div class="fichas-edit-field">
+      <label class="fichas-edit-label">Nome da receita</label>
+      <input class="fichas-edit-nome" value="${escHtml(ficha.nome)}"
+        onchange="updateFichaField('${id}','nome',this.value)">
+    </div>
+    <div class="fichas-edit-row2">
+      <div class="fichas-edit-field">
+        <label class="fichas-edit-label">Categoria</label>
+        <select class="fichas-edit-cat" onchange="updateFichaField('${id}','cat',this.value)">${catOptions}</select>
+      </div>
+      <div class="fichas-edit-field">
+        <label class="fichas-edit-label">Rendimento (g)</label>
+        <input class="fichas-edit-rend" type="number" value="${ficha.rend || ''}"
+          onchange="updateFichaField('${id}','rend',parseInt(this.value)||0)" placeholder="0">
+      </div>
+    </div>
+    <div class="fichas-ing-header">
+      <span>Ingredientes</span>
+      <button class="fichas-add-ing-btn" onclick="addFichaIng('${id}')">+ Adicionar</button>
+    </div>
+    <div class="fichas-ing-list">${ingRows}</div>`;
+}
+
+function updateFichaField(id, field, value) {
+  const ficha = (state.fichas || []).find(f => f.id === id);
+  if (!ficha) return;
+  ficha[field] = value;
+  scheduleSave();
+}
+
+function updateFichaIng(id, idx, field, value) {
+  const ficha = (state.fichas || []).find(f => f.id === id);
+  if (!ficha || !ficha.ing[idx]) return;
+  ficha.ing[idx][field] = value;
+  scheduleSave();
+}
+
+function moveFichaIng(id, idx, dir) {
+  const ficha = (state.fichas || []).find(f => f.id === id);
+  if (!ficha) return;
+  const ni = idx + dir;
+  if (ni < 0 || ni >= ficha.ing.length) return;
+  [ficha.ing[idx], ficha.ing[ni]] = [ficha.ing[ni], ficha.ing[idx]];
+  scheduleSave();
+  renderFichasEditForm(id);
+}
+
+function deleteFichaIng(id, idx) {
+  const ficha = (state.fichas || []).find(f => f.id === id);
+  if (!ficha) return;
+  ficha.ing.splice(idx, 1);
+  scheduleSave();
+  renderFichasEditForm(id);
+}
+
+function addFichaIng(id) {
+  const ficha = (state.fichas || []).find(f => f.id === id);
+  if (!ficha) return;
+  ficha.ing.push({ n: '', q: 0, u: 'kg' });
+  scheduleSave();
+  renderFichasEditForm(id);
+  setTimeout(() => {
+    const rows = document.querySelectorAll('.fichas-ing-name');
+    if (rows.length) rows[rows.length - 1].focus();
+  }, 50);
+}
+
+function newFicha() {
+  if (!state.fichas) state.fichas = [];
+  const id = 'ficha_' + Date.now().toString(36);
+  state.fichas.push({ id, nome: 'Nova Ficha', cat: 'prato', rend: 0, porcao: 0, ing: [] });
+  scheduleSave();
+  showFichasEdit(id);
+}
+
+function deleteFichaById(id) {
+  if (!id || !confirm('Excluir esta ficha técnica?')) return;
+  state.fichas = (state.fichas || []).filter(f => f.id !== id);
+  scheduleSave();
+  showFichasList();
 }
 
 // ── Start ─────────────────────────────────────────────────────
