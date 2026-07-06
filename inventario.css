@@ -1462,12 +1462,190 @@ body {
 }
 
 .cmv-panel-week-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.2px;
+}
+
+/* Topbar: data + ícones admin */
+.cmv-panel-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cmv-panel-topbar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.cmv-outros-alert {
   font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: rgba(255,255,255,0.55);
+  color: #fbbf24;
 }
+.cmv-panel-icon-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.cmv-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  font-size: 17px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.cmv-icon-btn:active { background: rgba(255,255,255,0.22); }
+
+/* Botões principais Foto NF / Manual */
+.cmv-panel-main-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cmv-mainbtn-foto,
+.cmv-mainbtn-manual {
+  padding: 11px 8px;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.12s;
+}
+.cmv-mainbtn-foto {
+  background: rgba(255,255,255,0.14);
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,0.25);
+}
+.cmv-mainbtn-manual {
+  background: var(--red);
+  color: #fff;
+}
+.cmv-mainbtn-foto:active,
+.cmv-mainbtn-manual:active { opacity: 0.75; }
+
+/* Tabs Todas / Por Linha */
+.cmv-notas-view-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px 4px;
+}
+.cmv-nvtab {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1.5px solid #e5e7eb;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cmv-nvtab.active {
+  background: #1e293b;
+  border-color: #1e293b;
+  color: #fff;
+}
+
+/* Grupos por linha */
+.cmv-lg-group {
+  border-bottom: 1px solid #f3f4f6;
+  padding: 10px 12px;
+}
+.cmv-lg-group:last-child { border-bottom: none; }
+.cmv-lg-outros { background: #fffbeb; }
+.cmv-lg-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cmv-lg-linha-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #111827;
+  flex: 1;
+}
+.cmv-lg-warn-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #b45309;
+}
+.cmv-lg-total {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+}
+.cmv-lg-rows { display: flex; flex-direction: column; gap: 6px; }
+.cmv-lg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+.cmv-lg-row-left { flex: 1; min-width: 0; }
+.cmv-lg-forn {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmv-lg-data { font-size: 11px; color: #9ca3af; }
+.cmv-lg-row-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.cmv-lg-val { font-size: 13px; font-weight: 700; color: #374151; }
+.cmv-lg-select {
+  font-size: 11px;
+  font-family: inherit;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 3px 6px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  max-width: 110px;
+}
+.cmv-lg-icon {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 2px;
+  line-height: 1;
+}
+.cmv-lg-icon:active { color: #374151; }
 
 .cmv-panel-cmvpct {
   font-size: 24px;
