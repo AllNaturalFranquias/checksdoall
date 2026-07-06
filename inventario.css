@@ -2255,3 +2255,148 @@ body { padding-bottom: 62px; }
 .comp-linha-right { text-align: right; min-width: 76px; }
 .comp-linha-val { font-size: 12px; font-weight: 700; color: #111827; display: block; }
 .comp-linha-pct { font-size: 10px; color: #9ca3af; }
+
+/* ── Fichas Técnicas overlay ────────────────────────────────── */
+.fichas-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: #fff;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.fichas-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 12px;
+  background: #1A7F3C; color: #fff;
+  flex-shrink: 0;
+}
+.fichas-title { font-size: 16px; font-weight: 700; }
+.fichas-back-btn {
+  background: none; border: none; color: #fff;
+  font-size: 14px; font-weight: 600; cursor: pointer; padding: 4px 8px;
+}
+.fichas-new-btn {
+  background: rgba(255,255,255,0.18); border: none; color: #fff;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  padding: 6px 12px; border-radius: 8px;
+}
+.fichas-cat-tabs {
+  display: flex; gap: 6px; padding: 10px 12px 6px;
+  overflow-x: auto; flex-shrink: 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.fichas-cat-tabs::-webkit-scrollbar { display: none; }
+.fichas-catbtn {
+  flex-shrink: 0;
+  background: #f3f4f6; border: none; border-radius: 99px;
+  padding: 6px 12px; font-size: 12px; font-weight: 600; color: #4b5563;
+  cursor: pointer; transition: background 0.15s;
+}
+.fichas-catbtn.active { background: #1A7F3C; color: #fff; }
+.fichas-search-wrap { padding: 6px 12px; flex-shrink: 0; }
+.fichas-search {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px;
+  font-size: 14px; background: #f9fafb; outline: none;
+}
+.fichas-search:focus { border-color: #1A7F3C; }
+.fichas-list {
+  flex: 1; overflow-y: auto; padding: 8px 12px 80px;
+  -webkit-overflow-scrolling: touch;
+}
+.fichas-empty { text-align: center; color: #9ca3af; padding: 40px 0; font-size: 14px; }
+.fichas-card {
+  background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px;
+  padding: 14px 16px; margin-bottom: 8px; cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.fichas-card:active { border-color: #1A7F3C; box-shadow: 0 0 0 3px rgba(26,127,60,0.12); }
+.fichas-card-nome { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 4px; }
+.fichas-card-meta { font-size: 12px; color: #6b7280; display: flex; align-items: center; gap: 6px; }
+.fichas-cat-badge {
+  display: inline-block; padding: 2px 7px; border-radius: 99px;
+  font-size: 11px; font-weight: 700;
+}
+.fichas-cat-base     { background: #dbeafe; color: #1d4ed8; }
+.fichas-cat-prato    { background: #d1fae5; color: #065f46; }
+.fichas-cat-salada   { background: #dcfce7; color: #166534; }
+.fichas-cat-snack    { background: #fef3c7; color: #92400e; }
+.fichas-cat-cafe     { background: #ede9fe; color: #5b21b6; }
+.fichas-cat-cafe_manha { background: #fce7f3; color: #9d174d; }
+.fichas-cat-suco     { background: #ffedd5; color: #9a3412; }
+
+/* Edit view */
+#fichasListView, #fichasEditView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.fichas-edit-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid #e5e7eb; flex-shrink: 0;
+  background: #f9fafb;
+}
+.fichas-del-btn {
+  background: none; border: 1px solid #fca5a5; color: #dc2626;
+  font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer;
+}
+.fichas-edit-content {
+  flex: 1; overflow-y: auto; padding: 14px 14px 80px;
+  -webkit-overflow-scrolling: touch;
+}
+.fichas-edit-field { margin-bottom: 12px; }
+.fichas-edit-label { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; display: block; margin-bottom: 4px; }
+.fichas-edit-nome, .fichas-edit-rend {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 12px; border: 1.5px solid #e5e7eb; border-radius: 10px;
+  font-size: 15px; font-weight: 600; color: #111827; background: #fff; outline: none;
+}
+.fichas-edit-nome:focus, .fichas-edit-rend:focus { border-color: #1A7F3C; }
+.fichas-edit-cat {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 12px; border: 1.5px solid #e5e7eb; border-radius: 10px;
+  font-size: 14px; background: #fff; outline: none;
+}
+.fichas-edit-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.fichas-ing-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 14px 0 8px; font-size: 13px; font-weight: 700; color: #374151;
+}
+.fichas-add-ing-btn {
+  background: #1A7F3C; color: #fff; border: none;
+  padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.fichas-ing-list { display: flex; flex-direction: column; gap: 6px; }
+.fichas-ing-row {
+  display: flex; align-items: center; gap: 6px;
+  background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px;
+}
+.fichas-ing-order { display: flex; flex-direction: column; gap: 2px; }
+.fichas-ord-btn {
+  background: none; border: none; font-size: 11px; color: #9ca3af;
+  cursor: pointer; padding: 1px 3px; line-height: 1;
+}
+.fichas-ord-btn:active { color: #1A7F3C; }
+.fichas-ing-name {
+  flex: 2; padding: 8px 8px; border: 1px solid #e5e7eb; border-radius: 8px;
+  font-size: 13px; min-width: 0; background: #fff; outline: none;
+}
+.fichas-ing-name:focus { border-color: #1A7F3C; }
+.fichas-ing-qty {
+  width: 64px; flex-shrink: 0; padding: 8px 6px; border: 1px solid #e5e7eb; border-radius: 8px;
+  font-size: 13px; text-align: right; background: #fff; outline: none;
+}
+.fichas-ing-qty:focus { border-color: #1A7F3C; }
+.fichas-ing-un {
+  width: 52px; flex-shrink: 0; padding: 8px 4px; border: 1px solid #e5e7eb; border-radius: 8px;
+  font-size: 12px; background: #fff; outline: none;
+}
+.fichas-ing-del {
+  background: none; border: none; color: #9ca3af; font-size: 13px;
+  cursor: pointer; padding: 4px; flex-shrink: 0;
+}
+.fichas-ing-del:active { color: #dc2626; }
+
+/* Contagem: barra dupla (iniciado + completo) */
+.cntdash-bar-bg { position: relative; }
+.cntdash-bar-complete {
+  position: absolute; top: 0; left: 0; height: 100%;
+  background: rgba(255,255,255,0.4);
+  border-radius: 99px; pointer-events: none;
+}
