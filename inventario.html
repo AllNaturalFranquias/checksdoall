@@ -204,20 +204,50 @@
     </div>
   </div>
 
-  <!-- Modal: Gerenciar Linhas de Produto (admin) -->
-  <div class="inv-overlay" id="invLinhasOverlay">
-    <div class="inv-modal">
-      <h2>Linhas de Produto</h2>
-      <p style="font-size:13px;color:#666;margin-bottom:14px">Categorias para classificar suas notas fiscais.</p>
-      <div id="linhasList" style="margin-bottom:12px"></div>
-      <div style="display:flex;gap:8px">
-        <input id="novaLinhaInput" type="text" placeholder="Nova linha..." autocomplete="off"
-               style="flex:1;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-family:inherit;font-size:14px"
-               onkeydown="if(event.key==='Enter')addLinha()">
-        <button class="inv-modal-btn" style="flex:0;padding:9px 16px" onclick="addLinha()">+ Adicionar</button>
-      </div>
-      <button class="inv-modal-cancel" onclick="closeLinhas()" style="margin-top:12px">Fechar</button>
+  <!-- Linhas de Produto — overlay full-screen -->
+  <div class="linhas-overlay" id="invLinhasOverlay" style="display:none">
+
+    <!-- Header dinâmico -->
+    <div class="linhas-header">
+      <button class="linhas-nav-btn" id="linhasBackBtn" onclick="linhasGoBack()" style="display:none">←</button>
+      <span class="linhas-title" id="linhasTitle">Linhas de Produto</span>
+      <button class="linhas-nav-btn" onclick="closeLinhas()">✕</button>
     </div>
+
+    <!-- Seletor de semana -->
+    <div class="linhas-week-bar">
+      <button class="linhas-week-arr" onclick="linhasChangeWeek(-1)">‹</button>
+      <span class="linhas-week-lbl" id="linhasWeekLbl"></span>
+      <button class="linhas-week-arr" onclick="linhasChangeWeek(1)">›</button>
+    </div>
+
+    <!-- View 1: Home (resumo por linha) -->
+    <div class="linhas-view" id="linhasViewHome">
+      <div id="linhasHomeContent" class="linhas-scroll"></div>
+      <!-- Gerenciar linhas (colapsível) -->
+      <div class="linhas-mgr-toggle">
+        <button class="linhas-mgr-toggle-btn" onclick="toggleLinhasMgr()">⚙ Gerenciar linhas</button>
+      </div>
+      <div class="linhas-mgr-section" id="linhasMgrSection" style="display:none">
+        <div id="linhasList" class="linhas-mgr-list"></div>
+        <div class="linhas-mgr-add">
+          <input id="novaLinhaInput" type="text" placeholder="Nova linha..." autocomplete="off"
+                 onkeydown="if(event.key==='Enter')addLinha()">
+          <button onclick="addLinha()">+ Adicionar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- View 2: Notas de uma linha -->
+    <div class="linhas-view" id="linhasViewNotas" style="display:none">
+      <div id="linhasNotasContent" class="linhas-scroll"></div>
+    </div>
+
+    <!-- View 3: Editar nota -->
+    <div class="linhas-view" id="linhasViewEditNota" style="display:none">
+      <div id="linhasEditNotaContent" class="linhas-scroll"></div>
+    </div>
+
   </div>
 
   <!-- Modal: Configurar chave Gemini (admin) -->
