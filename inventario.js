@@ -2517,6 +2517,93 @@ function calcProjecao() {
   return { gastoProj, fatProj, cmvProj, semCount };
 }
 
+function buildNotasByLinhaHtml(notas) {
+  // Agrupar notas por linha (considera split e nota simples)
+  const groups = {};
+  for (const n of notas) {
+    if (n.linhas?.length) {
+      for (const l of n.linhas) {
+        const key = l.linha || 'Outros';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push({ nota: n, valor: l.valor, split: true });
+      }
+    } else {
+      const key = n.linha || 'Outros';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push({ nota: n, valor: n.valor, split: false });
+    }
+  }
+
+  if (!Object.keys(groups).length) return '<p class="cmv-panel-notas-vazio">Nenhuma nota nesta semana</p>';
+
+  // Ordenar: linhas conhecidas primeiro, Outros por último
+  const known = linhasConfig.linhas;
+  const sortedKeys = Object.keys(groups).sort((a, b) => {
+    if (a === 'Outros' || a === '') return 1;
+    if (b === 'Outros' || b === '') return -1;
+    const ia = known.indexOf(a), ib = known.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+
+  const linhaOpts = known.map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
+
+  return sortedKeys.map(key => {
+    const items  = groups[key];
+    const total  = items.reduce((s, i) => s + i.valor, 0);
+    const isOutros = !key || key === 'Outros';
+
+    const rows = items.map(({ nota: n, valor, split }) => {
+      const reassign = split
+        ? `<button class="cmv-lg-icon" onclick="openSplitNota('${n.id}')" title="Editar divisão">✂</button>`
+        : `<select class="cmv-lg-select" onchange="quickReassignLinha('${n.id}',this.value)">
+             <option value="${escHtml(key)}" selected>${escHtml(key)}</option>
+             ${linhaOpts.replace(`value="${escHtml(key)}"`, `value="${escHtml(key)}" hidden`)}
+           </select>`;
+      return `<div class="cmv-lg-row">
+        <div class="cmv-lg-row-left">
+          <span class="cmv-lg-forn">${escHtml(n.fornecedor)}</span>
+          <span class="cmv-lg-data">${n.data || ''}</span>
+        </div>
+        <div class="cmv-lg-row-right">
+          <span class="cmv-lg-val">R$ ${fmt(valor)}</span>
+          ${reassign}
+          <button class="cmv-lg-icon" onclick="openEditNota('${n.id}')">✏️</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="cmv-lg-group${isOutros ? ' cmv-lg-outros' : ''}">
+      <div class="cmv-lg-header">
+        <span class="cmv-lg-linha-name">${isOutros ? '⚠ ' : ''}${escHtml(key || 'Outros')}</span>
+        ${isOutros ? '<span class="cmv-lg-warn-badge">reclassificar</span>' : ''}
+        <span class="cmv-lg-total">R$ ${fmt(total)}</span>
+      </div>
+      <div class="cmv-lg-rows">${rows}</div>
+    </div>`;
+  }).join('');
+}
+
+function switchNotasTab(tab, btn) {
+  document.querySelectorAll('.cmv-nvtab').forEach(b => b.classList.toggle('active', b === btn));
+  const t = document.getElementById('notasTabTodas');
+  const l = document.getElementById('notasTabLinha');
+  if (t) t.style.display = tab === 'todas' ? '' : 'none';
+  if (l) l.style.display = tab === 'linha'  ? '' : 'none';
+}
+
+function quickReassignLinha(notaId, novaLinha) {
+  if (!novaLinha) return;
+  const d = getCMVData();
+  const nota = (d.notas || []).find(n => n.id === notaId);
+  if (!nota) return;
+  nota.linha = novaLinha;
+  delete nota.linhas;
+  learnFornecedorLinha(nota.fornecedor, novaLinha);
+  doSave();
+  renderCMVPanel();
+  showToast('Linha atualizada ✓');
+}
+
 function renderCMVPanel() {
   const panel = document.getElementById('cmvPanel');
   if (!panel) return;
@@ -2530,32 +2617,20 @@ function renderCMVPanel() {
   const saldo  = meta !== null ? meta - total : null;
   const cmvReal = fat && fat > 0 ? (total / fat * 100) : null;
   const progPct = meta ? Math.min(total / meta * 100, 100) : 0;
-  const monthly = calcMonthlyAvg();
 
   let barColor = '#22c55e';
   if (progPct >= 100) barColor = '#ef4444';
   else if (progPct >= 80) barColor = '#f59e0b';
 
   const geminiOk = !!getGeminiKey();
-  const actionBtns = `
-    <div class="cmv-panel-actions">
-      <button class="cmv-panel-btn-foto" onclick="openCameraForNF()" title="${geminiOk ? 'Tirar foto de NF' : 'Configure a chave Gemini primeiro'}">
-        📷 Foto NF${geminiOk ? '' : ' ⚠'}
-      </button>
-      <button class="cmv-panel-btn-cfg" onclick="openNFManual()" title="Inserir nota manualmente com itens">📝 Manual</button>
-      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openCMVConfig()">⚙ CMV</button>` : ''}
-      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openLinhas()" title="Gerenciar linhas de produto">📦 Linhas</button>` : ''}
-      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openGeminiKeyModal()" title="Configurar chave Gemini">🔑 IA</button>` : ''}
-      ${IS_ADMIN ? `<button class="cmv-panel-btn-cfg" onclick="openTrocarPin()" title="Trocar meu PIN">👤 PIN</button>` : ''}
-    </div>`;
 
+  // Lista de notas (aba Todas)
   const notasHtml = notas.length
     ? notas.map(n => {
         const linhasDisplay = n.linhas?.length
           ? n.linhas.map(l => `<span class="cmv-panel-nota-linha">${escHtml(l.linha)} R$ ${fmt(l.valor)}</span>`).join('')
-          : n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>` : '';
-        return `
-        <div class="cmv-panel-nota">
+          : n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>` : '<span class="cmv-panel-nota-linha" style="color:#f59e0b">sem linha</span>';
+        return `<div class="cmv-panel-nota">
           <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
             <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
             <div style="display:flex;flex-wrap:wrap;gap:4px">${linhasDisplay}</div>
@@ -2573,7 +2648,7 @@ function renderCMVPanel() {
   const breakdown = calcLinhaBreakdown(notas, fat);
   const linhaBreakdownHtml = breakdown.length > 0 ? `
     <div class="cmv-linhas-breakdown">
-      <div class="cmv-linhas-title">Por linha de produto</div>
+      <div class="cmv-linhas-title">Gasto por linha</div>
       ${breakdown.map(b => `
         <div class="cmv-linha-row">
           <span class="cmv-linha-nome">${escHtml(b.linha)}</span>
@@ -2582,7 +2657,7 @@ function renderCMVPanel() {
         </div>`).join('')}
     </div>` : '';
 
-  // CMV mês YTD = total gasto acumulado / total faturamento acumulado (semanas do mês atual)
+  // YTD mês
   const _hoje = new Date();
   const _mesNum = _hoje.getFullYear() * 100 + (_hoje.getMonth() + 1);
   let gastoYTD = 0, fatYTD = 0;
@@ -2593,31 +2668,53 @@ function renderCMVPanel() {
     gastoYTD += (dw.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
     if (dw.faturamento > 0) fatYTD += dw.faturamento;
   });
-  const cmvYTD     = fatYTD > 0 ? gastoYTD / fatYTD * 100 : null;
-  const ytdColor   = cmvYTD != null
+  const cmvYTD   = fatYTD > 0 ? gastoYTD / fatYTD * 100 : null;
+  const ytdColor = cmvYTD != null
     ? (cmvYTD > pct * 1.1 ? '#ef4444' : cmvYTD > pct ? '#f59e0b' : '#4ade80')
     : '#9ca3af';
 
+  // Verificar se há notas em "Outros" para alerta
+  const hasOutros = notas.some(n => !n.linha && !n.linhas?.length || n.linha === 'Outros');
+
   panel.innerHTML = `
     <div class="cmv-panel-header">
-      <div class="cmv-panel-title-row">
-        <span class="cmv-panel-week-label">${getWeekLabel(state.semana)}</span>
-        <div style="flex:1"></div>
-        ${actionBtns.replace('<div class="cmv-panel-actions">', '<div class="cmv-panel-actions" style="margin-top:0">')}
+
+      <!-- Topbar: data + ícones admin -->
+      <div class="cmv-panel-topbar">
+        <div class="cmv-panel-topbar-left">
+          <span class="cmv-panel-week-label">${getWeekLabel(state.semana)}</span>
+          ${hasOutros ? `<span class="cmv-outros-alert">⚠ Notas sem linha</span>` : ''}
+        </div>
+        <div class="cmv-panel-icon-row">
+          ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openCMVConfig()" title="Faturamento e meta">⚙️</button>` : ''}
+          ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openLinhas()" title="Linhas de produto">📦</button>` : ''}
+          ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openGeminiKeyModal()" title="Chave Gemini IA">🔑</button>` : ''}
+          ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openTrocarPin()" title="Meu PIN">👤</button>` : ''}
+        </div>
       </div>
 
-      <!-- Dois KPIs grandes -->
+      <!-- Botões principais: Foto NF + Manual -->
+      <div class="cmv-panel-main-btns">
+        <button class="cmv-mainbtn-foto" onclick="openCameraForNF()">
+          📷 Foto NF${geminiOk ? '' : ' ⚠'}
+        </button>
+        <button class="cmv-mainbtn-manual" onclick="openNFManual()">
+          📝 Manual
+        </button>
+      </div>
+
+      <!-- KPIs -->
       <div class="cmv-kpis-row">
         <div class="cmv-kpi-block">
           <span class="cmv-kpi-label">CMV semana</span>
           <span class="cmv-kpi-value" style="color:${barColor}">${cmvReal !== null ? cmvReal.toFixed(1) + '%' : '—'}</span>
-          <span class="cmv-kpi-sub">${fat ? `meta ${pct}% · R$ ${fmt(total)}` : IS_ADMIN ? 'configure faturamento' : 'sem faturamento'}</span>
+          <span class="cmv-kpi-sub">${fat ? `meta ${pct}% · R$ ${fmt(total)}` : IS_ADMIN ? 'configure ⚙️' : 'sem faturamento'}</span>
         </div>
         <div class="cmv-kpi-divider"></div>
         <div class="cmv-kpi-block">
           <span class="cmv-kpi-label">CMV mês</span>
           <span class="cmv-kpi-value" style="color:${ytdColor}">${cmvYTD != null ? cmvYTD.toFixed(1) + '%' : '—'}</span>
-          <span class="cmv-kpi-sub">${fatYTD > 0 ? `R$ ${fmt(gastoYTD)} de R$ ${fmt(fatYTD)}` : 'aguardando dados'}</span>
+          <span class="cmv-kpi-sub">${fatYTD > 0 ? `R$ ${fmt(gastoYTD)} / R$ ${fmt(fatYTD)}` : 'aguardando dados'}</span>
         </div>
       </div>
 
@@ -2645,18 +2742,28 @@ function renderCMVPanel() {
           <span class="cmv-panel-metric-label">Faturamento</span>
           <span class="cmv-panel-metric-val">R$ ${fmt(fat)}</span>
         </div>
-      </div>
-      ` : ''}
+      </div>` : ''}
 
-    ${linhaBreakdownHtml}
+      ${linhaBreakdownHtml}
 
-    <div class="cmv-panel-notas-section">
-      <button class="cmv-notas-toggle" onclick="toggleNotasDrawer(this)">
-        📋 ${notas.length} nota${notas.length !== 1 ? 's' : ''} · R$ ${fmt(total)}
-        <span class="cmv-notas-toggle-icon">▾</span>
-      </button>
-      <div class="cmv-notas-drawer" style="display:none">
-        <div class="cmv-panel-notas-list">${notasHtml}</div>
+      <!-- Notas com tabs Todas / Por Linha -->
+      <div class="cmv-panel-notas-section">
+        <button class="cmv-notas-toggle" onclick="toggleNotasDrawer(this)">
+          📋 ${notas.length} nota${notas.length !== 1 ? 's' : ''} · R$ ${fmt(total)}
+          <span class="cmv-notas-toggle-icon">▾</span>
+        </button>
+        <div class="cmv-notas-drawer" style="display:none">
+          <div class="cmv-notas-view-tabs">
+            <button class="cmv-nvtab active" onclick="switchNotasTab('todas',this)">Todas</button>
+            <button class="cmv-nvtab" onclick="switchNotasTab('linha',this)">Por Linha ${hasOutros ? '⚠' : ''}</button>
+          </div>
+          <div id="notasTabTodas">
+            <div class="cmv-panel-notas-list">${notasHtml}</div>
+          </div>
+          <div id="notasTabLinha" style="display:none">
+            ${buildNotasByLinhaHtml(notas)}
+          </div>
+        </div>
       </div>
     </div>
   `;
