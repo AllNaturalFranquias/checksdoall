@@ -132,9 +132,10 @@
           <label>Linha de produto</label>
           <select id="nfRevLinha" class="inv-select-linha"></select>
         </div>
-        <div class="nota-field">
-          <label>Data</label>
-          <input id="nfRevData" type="date">
+        <div class="nota-field nf-data-field">
+          <label>Data da NF <span class="nf-data-warn" id="nfDataWarn"></span></label>
+          <input id="nfRevData" type="date" onchange="checkNFDate(this.value)">
+          <span class="nf-data-hint" id="nfDataHint"></span>
         </div>
         <p style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 8px">
           Itens encontrados — selecione o item correspondente
