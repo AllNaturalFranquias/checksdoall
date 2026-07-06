@@ -1914,3 +1914,68 @@ body { padding-bottom: 62px; }
   flex-shrink: 0;
 }
 .cmv-nota-split:hover { color: #dc2626; }
+
+/* ── Comparativo view ────────────────────────────────────── */
+.comp-view { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.comp-section {
+  background: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.comp-section-title { font-size: 13px; font-weight: 800; color: #111827; margin-bottom: 4px; }
+.comp-section-sub { font-size: 11px; color: #9ca3af; margin-bottom: 12px; }
+.comp-empty { font-size: 13px; color: #9ca3af; text-align: center; padding: 16px 0; }
+
+/* CMV table */
+.comp-table-wrap { overflow-x: auto; margin-top: 12px; }
+.comp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.comp-table th {
+  text-align: left; padding: 6px 8px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.4px; color: #9ca3af;
+  border-bottom: 1.5px solid #f3f4f6;
+}
+.comp-table td { padding: 8px 8px; border-bottom: 1px solid #f9fafb; color: #374151; }
+.comp-table tr:last-child td { border-bottom: none; }
+
+/* Preços monitorados */
+.comp-precos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.comp-preco-card {
+  background: #f9fafb; border-radius: 10px; padding: 12px 10px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.comp-preco-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.4px; color: #9ca3af;
+}
+.comp-preco-val { font-size: 15px; font-weight: 700; color: #111827; }
+.comp-preco-var { font-size: 11px; font-weight: 700; }
+
+/* Fornecedores ranking */
+.comp-forn-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.comp-forn-row { display: flex; align-items: center; gap: 10px; }
+.comp-forn-rank { font-size: 12px; font-weight: 800; color: #9ca3af; min-width: 16px; }
+.comp-forn-info { flex: 1; min-width: 0; }
+.comp-forn-nome {
+  font-size: 13px; font-weight: 600; color: #111827;
+  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;
+}
+.comp-forn-bar-bg { height: 4px; background: #f3f4f6; border-radius: 99px; }
+.comp-forn-bar-fill { height: 100%; background: #E8002D; border-radius: 99px; transition: width 0.4s; }
+.comp-forn-right { text-align: right; min-width: 64px; }
+.comp-forn-val { font-size: 13px; font-weight: 700; color: #111827; display: block; }
+.comp-forn-pct { font-size: 10px; color: #9ca3af; }
+
+/* Linha breakdown */
+.comp-linhas-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.comp-linha-row { display: flex; align-items: center; gap: 8px; }
+.comp-linha-nome {
+  font-size: 11px; font-weight: 600; color: #374151;
+  min-width: 82px; max-width: 82px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.comp-linha-bar-bg { flex: 1; height: 5px; background: #f3f4f6; border-radius: 99px; }
+.comp-linha-bar-fill { height: 100%; background: #1A7F3C; border-radius: 99px; transition: width 0.4s; }
+.comp-linha-right { text-align: right; min-width: 76px; }
+.comp-linha-val { font-size: 12px; font-weight: 700; color: #111827; display: block; }
+.comp-linha-pct { font-size: 10px; color: #9ca3af; }
