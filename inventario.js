@@ -3072,12 +3072,24 @@ function renderLinhasWeekBar() {
 }
 
 // ── View 1: Home — resumo por linha ──────────────────────────
+function calcLinhaMap(notas) {
+  const map = {};
+  for (const n of notas) {
+    if (n.linhas && n.linhas.length) {
+      for (const e of n.linhas) { const l = e.linha || 'Outros'; map[l] = (map[l] || 0) + (e.valor || 0); }
+    } else {
+      const l = n.linha || 'Outros'; map[l] = (map[l] || 0) + (n.valor || 0);
+    }
+  }
+  return map;
+}
+
 function renderLinhasHome() {
   const el = document.getElementById('linhasHomeContent');
   if (!el) return;
   const d = getCMVData(linhasWeekKey);
   const notas = d.notas || [];
-  const breakdown = calcLinhaBreakdown(notas, 0);
+  const breakdown = calcLinhaMap(notas);
   const total = Object.values(breakdown).reduce((s, v) => s + v, 0);
 
   // Ordenar: linhas configuradas primeiro, depois eventuais extras
