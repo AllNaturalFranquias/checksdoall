@@ -1463,8 +1463,8 @@ function confirmClear() {
 }
 
 // ── CMV ───────────────────────────────────────────────────────
-function getCMVData() {
-  const key = state.semana;
+function getCMVData(weekKey) {
+  const key = weekKey || state.semana;
   if (!state.cmv) state.cmv = {};
   if (!state.cmv[key]) state.cmv[key] = { faturamento: null, meta_pct: 30, notas: [] };
   return state.cmv[key];
@@ -3010,23 +3010,342 @@ function learnFornecedorLinha(fornecedor, linha) {
   saveLinhas();
 }
 
+// ── Linhas overlay — navegação ────────────────────────────────
+let linhasWeekKey   = '';
+let linhasViewStack = [];   // ['home'] | ['home','notas','edit']
+let linhasActiveLinha  = '';
+let linhasActiveNotaId = '';
+
 function openLinhas() {
-  renderLinhasList();
-  document.getElementById('invLinhasOverlay').classList.add('open');
+  linhasWeekKey   = state.semana;
+  linhasViewStack = ['home'];
+  document.getElementById('invLinhasOverlay').style.display = 'flex';
+  renderLinhasWeekBar();
+  showLinhasView('home');
 }
 
 function closeLinhas() {
-  document.getElementById('invLinhasOverlay').classList.remove('open');
+  document.getElementById('invLinhasOverlay').style.display = 'none';
+  linhasViewStack = [];
+}
+
+function linhasGoBack() {
+  linhasViewStack.pop();
+  const prev = linhasViewStack[linhasViewStack.length - 1] || 'home';
+  showLinhasView(prev);
+}
+
+function showLinhasView(view) {
+  ['home','notas','editNota'].forEach(v => {
+    const el = document.getElementById('linhasView' + v.charAt(0).toUpperCase() + v.slice(1));
+    if (el) el.style.display = v === view ? 'flex' : 'none';
+  });
+  const backBtn = document.getElementById('linhasBackBtn');
+  const titleEl = document.getElementById('linhasTitle');
+  if (backBtn) backBtn.style.display = linhasViewStack.length > 1 ? '' : 'none';
+
+  if (view === 'home') {
+    if (titleEl) titleEl.textContent = 'Linhas de Produto';
+    renderLinhasHome();
+  } else if (view === 'notas') {
+    if (titleEl) titleEl.textContent = linhasActiveLinha || 'Notas';
+    renderLinhasNotas();
+  } else if (view === 'editNota') {
+    if (titleEl) titleEl.textContent = 'Editar Nota';
+    renderLinhasEditNota();
+  }
+}
+
+function linhasChangeWeek(dir) {
+  const mon = getWeekMonday(linhasWeekKey);
+  mon.setDate(mon.getDate() + dir * 7);
+  linhasWeekKey = getWeekKey(mon);
+  renderLinhasWeekBar();
+  // Re-render current view
+  const cur = linhasViewStack[linhasViewStack.length - 1] || 'home';
+  showLinhasView(cur);
+}
+
+function renderLinhasWeekBar() {
+  const el = document.getElementById('linhasWeekLbl');
+  if (el) el.textContent = getWeekLabel(linhasWeekKey);
+}
+
+// ── View 1: Home — resumo por linha ──────────────────────────
+function renderLinhasHome() {
+  const el = document.getElementById('linhasHomeContent');
+  if (!el) return;
+  const d = getCMVData(linhasWeekKey);
+  const notas = d.notas || [];
+  const breakdown = calcLinhaBreakdown(notas, 0);
+  const total = Object.values(breakdown).reduce((s, v) => s + v, 0);
+
+  // Ordenar: linhas configuradas primeiro, depois eventuais extras
+  const ordered = [...linhasConfig.linhas];
+  Object.keys(breakdown).forEach(l => { if (!ordered.includes(l)) ordered.push(l); });
+  // Linhas sem notas também aparecem (valor 0)
+
+  if (!notas.length) {
+    el.innerHTML = '<p class="linhas-empty">Nenhuma nota nesta semana</p>';
+    return;
+  }
+
+  el.innerHTML = ordered.map(linha => {
+    const val  = breakdown[linha] || 0;
+    const pct  = total > 0 ? Math.round(val / total * 100) : 0;
+    const cnt  = contarNotasLinha(notas, linha);
+    const isOutros = (linha === 'Outros' || linha === '');
+    return `<div class="linhas-card ${isOutros && cnt > 0 ? 'linhas-card-warn' : ''}" onclick="openLinhaNotas('${escHtml(linha)}')">
+      <div class="linhas-card-top">
+        <span class="linhas-card-nome">${escHtml(linha || 'Sem linha')}</span>
+        <span class="linhas-card-val">R$ ${fmt(val)}</span>
+      </div>
+      <div class="linhas-bar-bg"><div class="linhas-bar-fill" style="width:${pct}%"></div></div>
+      <div class="linhas-card-foot">
+        <span>${cnt} nota${cnt !== 1 ? 's' : ''}</span>
+        <span>${pct}% do total</span>
+      </div>
+    </div>`;
+  }).join('') + `<div class="linhas-total-row"><span>Total semana</span><span>R$ ${fmt(total)}</span></div>`;
+}
+
+function contarNotasLinha(notas, linha) {
+  return notas.filter(n => {
+    if (n.linhas && n.linhas.length) return n.linhas.some(e => (e.linha || 'Outros') === linha);
+    return (n.linha || 'Outros') === linha;
+  }).length;
+}
+
+function openLinhaNotas(linha) {
+  linhasActiveLinha = linha;
+  linhasViewStack.push('notas');
+  showLinhasView('notas');
+}
+
+// ── View 2: Notas de uma linha ────────────────────────────────
+function renderLinhasNotas() {
+  const el = document.getElementById('linhasNotasContent');
+  if (!el) return;
+  const d = getCMVData(linhasWeekKey);
+  const notas = (d.notas || []).filter(n => {
+    if (n.linhas && n.linhas.length) return n.linhas.some(e => (e.linha || 'Outros') === linhasActiveLinha);
+    return (n.linha || 'Outros') === linhasActiveLinha;
+  });
+
+  if (!notas.length) {
+    el.innerHTML = '<p class="linhas-empty">Nenhuma nota nesta linha nesta semana</p>';
+    return;
+  }
+
+  el.innerHTML = notas.map(n => {
+    const isSplit = n.linhas && n.linhas.length > 0;
+    const valorLinha = isSplit
+      ? (n.linhas.find(e => (e.linha || 'Outros') === linhasActiveLinha)?.valor || 0)
+      : n.valor;
+    const splitTag = isSplit ? `<span class="linhas-split-tag">dividida · ${n.linhas.length} linhas</span>` : '';
+    return `<div class="linhas-nota-card" onclick="openEditNota('${n.id}')">
+      <div class="linhas-nota-top">
+        <span class="linhas-nota-forn">${escHtml(n.fornecedor || '—')}</span>
+        <span class="linhas-nota-val">R$ ${fmt(valorLinha)}</span>
+      </div>
+      <div class="linhas-nota-foot">
+        <span>${n.data || '—'} ${splitTag}</span>
+        <span class="linhas-nota-edit-hint">Toque para editar →</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openEditNota(notaId) {
+  linhasActiveNotaId = notaId;
+  linhasViewStack.push('editNota');
+  showLinhasView('editNota');
+}
+
+// ── View 3: Editar nota ───────────────────────────────────────
+function renderLinhasEditNota() {
+  const el = document.getElementById('linhasEditNotaContent');
+  if (!el) return;
+  const d = getCMVData(linhasWeekKey);
+  const nota = (d.notas || []).find(n => n.id === linhasActiveNotaId);
+  if (!nota) { el.innerHTML = '<p class="linhas-empty">Nota não encontrada</p>'; return; }
+
+  const isSplit = nota.linhas && nota.linhas.length > 0;
+  const linhaOpts = linhasConfig.linhas.map(l =>
+    `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
+
+  // Data no formato YYYY-MM-DD para input[type=date]
+  const dataISO = parseNotaDataToISO(nota.data);
+
+  const splitRows = (isSplit ? nota.linhas : [{ linha: nota.linha || '', valor: nota.valor || 0 }])
+    .map((entry, idx) => `
+      <div class="linhas-split-row" id="splitRow_${idx}">
+        <select class="linhas-split-sel" onchange="linhasEditSplitLinha(${idx},this.value)">
+          ${linhasConfig.linhas.map(l => `<option value="${escHtml(l)}"${(entry.linha||'')=== l?' selected':''}>${escHtml(l)}</option>`).join('')}
+        </select>
+        <input class="linhas-split-val" type="number" inputmode="decimal" step="0.01"
+          value="${(entry.valor||0).toFixed(2)}"
+          oninput="linhasEditSplitValor(${idx},parseFloat(this.value)||0)">
+        ${(isSplit || idx > 0) ? `<button class="linhas-split-del" onclick="linhasRemoveSplitRow(${idx})">✕</button>` : '<span></span>'}
+      </div>`).join('');
+
+  el.innerHTML = `
+    <div class="linhas-edit-form">
+      <div class="linhas-edit-field">
+        <label>Fornecedor</label>
+        <input id="leditForn" type="text" value="${escHtml(nota.fornecedor || '')}" placeholder="Fornecedor">
+      </div>
+      <div class="linhas-edit-field">
+        <label>Data da nota</label>
+        <input id="leditData" type="date" value="${dataISO}">
+      </div>
+      <div class="linhas-edit-field">
+        <label>Valor total</label>
+        <span class="linhas-edit-total" id="leditTotal">R$ ${fmt(nota.valor || 0)}</span>
+      </div>
+
+      <div class="linhas-split-header">
+        <span>Linha${isSplit ? 's' : ''} de produto</span>
+        <button class="linhas-add-split-btn" onclick="linhasAddSplitRow()">+ Dividir</button>
+      </div>
+      <div id="linhasSplitRows">${splitRows}</div>
+      <div class="linhas-split-resto" id="linhasSplitResto"></div>
+
+      <div class="linhas-edit-actions">
+        <button class="linhas-save-btn" onclick="saveLinhasEditNota()">Salvar</button>
+        <button class="linhas-del-nota-btn" onclick="deleteLinhasNota()">Excluir nota</button>
+      </div>
+    </div>`;
+
+  linhasUpdateResto();
+}
+
+// Helpers temporários para edição de splits (guardados no DOM)
+function linhasGetSplitState() {
+  const rows = document.querySelectorAll('.linhas-split-row');
+  return [...rows].map(row => ({
+    linha: row.querySelector('.linhas-split-sel')?.value || '',
+    valor: parseFloat(row.querySelector('.linhas-split-val')?.value) || 0
+  }));
+}
+
+function linhasEditSplitLinha(idx, val) { linhasUpdateResto(); }
+function linhasEditSplitValor(idx, val) { linhasUpdateResto(); }
+
+function linhasUpdateResto() {
+  const nota = (getCMVData(linhasWeekKey).notas || []).find(n => n.id === linhasActiveNotaId);
+  if (!nota) return;
+  const splits = linhasGetSplitState();
+  const totalSplit = splits.reduce((s, r) => s + r.valor, 0);
+  const resto = +(nota.valor - totalSplit).toFixed(2);
+  const el = document.getElementById('linhasSplitResto');
+  if (!el) return;
+  if (splits.length > 1) {
+    el.textContent = resto !== 0
+      ? `Diferença: R$ ${fmt(Math.abs(resto))} ${resto < 0 ? '(excede)' : '(falta)'}`
+      : 'Valores conferem ✓';
+    el.className = 'linhas-split-resto' + (resto !== 0 ? ' linhas-split-resto-warn' : ' linhas-split-resto-ok');
+  } else {
+    el.textContent = '';
+  }
+}
+
+function linhasAddSplitRow() {
+  const container = document.getElementById('linhasSplitRows');
+  if (!container) return;
+  const idx = container.querySelectorAll('.linhas-split-row').length;
+  const div = document.createElement('div');
+  div.className = 'linhas-split-row';
+  div.id = 'splitRow_' + idx;
+  div.innerHTML = `
+    <select class="linhas-split-sel" onchange="linhasEditSplitLinha(${idx},this.value)">
+      ${linhasConfig.linhas.map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('')}
+    </select>
+    <input class="linhas-split-val" type="number" inputmode="decimal" step="0.01" value="0"
+      oninput="linhasEditSplitValor(${idx},parseFloat(this.value)||0)">
+    <button class="linhas-split-del" onclick="linhasRemoveSplitRow(${idx})">✕</button>`;
+  container.appendChild(div);
+  linhasUpdateResto();
+}
+
+function linhasRemoveSplitRow(idx) {
+  const row = document.getElementById('splitRow_' + idx);
+  if (row) row.remove();
+  // Re-index IDs
+  document.querySelectorAll('.linhas-split-row').forEach((r, i) => {
+    r.id = 'splitRow_' + i;
+    const sel = r.querySelector('.linhas-split-sel');
+    const inp = r.querySelector('.linhas-split-val');
+    const del = r.querySelector('.linhas-split-del');
+    if (sel) sel.setAttribute('onchange', `linhasEditSplitLinha(${i},this.value)`);
+    if (inp) inp.setAttribute('oninput', `linhasEditSplitValor(${i},parseFloat(this.value)||0)`);
+    if (del) del.setAttribute('onclick', `linhasRemoveSplitRow(${i})`);
+  });
+  linhasUpdateResto();
+}
+
+function saveLinhasEditNota() {
+  const d = getCMVData(linhasWeekKey);
+  const nota = (d.notas || []).find(n => n.id === linhasActiveNotaId);
+  if (!nota) return;
+
+  const forn  = document.getElementById('leditForn')?.value.trim() || nota.fornecedor;
+  const dataV = document.getElementById('leditData')?.value;
+  const dataFmt = dataV
+    ? new Date(dataV + 'T12:00:00').toLocaleDateString('pt-BR')
+    : nota.data;
+
+  nota.fornecedor = forn;
+  nota.data = dataFmt;
+
+  const splits = linhasGetSplitState();
+  if (splits.length === 1) {
+    nota.linha  = splits[0].linha;
+    delete nota.linhas;
+  } else {
+    nota.linhas = splits;
+    nota.linha  = '';
+  }
+
+  doSave();
+  renderCMVPanel();
+  showToast('Nota atualizada ✓');
+  linhasGoBack();
+}
+
+function deleteLinhasNota() {
+  if (!confirm('Excluir esta nota?')) return;
+  const d = getCMVData(linhasWeekKey);
+  d.notas = (d.notas || []).filter(n => n.id !== linhasActiveNotaId);
+  doSave();
+  renderCMVPanel();
+  showToast('Nota excluída');
+  linhasGoBack();
+}
+
+function parseNotaDataToISO(dataStr) {
+  if (!dataStr) return new Date().toISOString().slice(0, 10);
+  const p = dataStr.split('/');
+  if (p.length === 3) return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toggleLinhasMgr() {
+  const sec = document.getElementById('linhasMgrSection');
+  if (!sec) return;
+  const open = sec.style.display === 'none';
+  sec.style.display = open ? 'block' : 'none';
+  if (open) renderLinhasList();
 }
 
 function renderLinhasList() {
   const el = document.getElementById('linhasList');
   if (!el) return;
   el.innerHTML = linhasConfig.linhas.map((l, i) => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6">
-      <span style="font-size:14px;font-weight:500;color:#1e293b">${escHtml(l)}</span>
-      ${linhasConfig.linhas.length > 1 ? `<button onclick="removeLinha(${i})"
-        style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:2px 6px">✕</button>` : ''}
+    <div class="linhas-mgr-row">
+      <span>${escHtml(l)}</span>
+      ${linhasConfig.linhas.length > 1
+        ? `<button class="linhas-mgr-del" onclick="removeLinha(${i})">✕</button>` : ''}
     </div>`).join('');
 }
 
