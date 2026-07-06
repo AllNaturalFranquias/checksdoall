@@ -2231,6 +2231,47 @@ function addNFManualItem() {
   }, 50);
 }
 
+function parseNFDate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  // DD/MM/YYYY
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  // YYYY-MM-DD
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return s;
+  // DD-MM-YYYY
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return null;
+}
+
+function checkNFDate(val, ocrFailed) {
+  const warnEl = document.getElementById('nfDataWarn');
+  const hintEl = document.getElementById('nfDataHint');
+  const fieldEl = document.getElementById('nfRevData');
+  if (!val) {
+    if (warnEl) warnEl.textContent = '⚠ preencha a data';
+    if (fieldEl) fieldEl.classList.add('nf-data-alert');
+    return;
+  }
+  const d = new Date(val + 'T12:00:00');
+  const today = new Date();
+  const diffDays = Math.round((today - d) / 86400000);
+  let warn = '';
+  let hint = d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (ocrFailed) {
+    warn = '⚠ data não lida — verifique';
+  } else if (diffDays > 14) {
+    warn = `⚠ ${diffDays} dias atrás — confira`;
+  } else if (diffDays < 0) {
+    warn = '⚠ data no futuro — confira';
+  }
+  if (warnEl) warnEl.textContent = warn;
+  if (hintEl) hintEl.textContent = hint;
+  if (fieldEl) fieldEl.classList.toggle('nf-data-alert', !!warn);
+}
+
 function showNFReview(geminiData) {
   document.getElementById('nfReviewLoading').style.display = 'none';
   document.getElementById('nfReviewContent').style.display = 'block';
@@ -2239,11 +2280,10 @@ function showNFReview(geminiData) {
   const dataEl = document.getElementById('nfRevData');
   if (fornEl) fornEl.value = geminiData.fornecedor || '';
   populateLinhaSelect('nfRevLinha', geminiData.fornecedor || '', geminiData.itens || []);
-  if (dataEl && geminiData.data) {
-    const p = geminiData.data.split('/');
-    if (p.length === 3) dataEl.value = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-  } else if (dataEl) {
-    dataEl.value = new Date().toISOString().slice(0,10);
+  if (dataEl) {
+    const parsed = parseNFDate(geminiData.data);
+    dataEl.value = parsed || new Date().toISOString().slice(0,10);
+    checkNFDate(dataEl.value, !parsed);
   }
 
   nfExtractedItems = (geminiData.itens || []).map((item, idx) => ({
