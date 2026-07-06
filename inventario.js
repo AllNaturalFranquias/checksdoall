@@ -641,6 +641,7 @@ function switchView(view) {
   if (searchBar) searchBar.style.display = view === 'contagem' ? '' : 'none';
 
   if (view === 'dashboard')   renderDashboard();
+  if (view === 'contagem')    renderContagemDash();
   if (view === 'cmv')         renderCMVPanel();
   if (view === 'config')      renderConfigView();
   if (view === 'comparativo') renderComparativo();
@@ -799,10 +800,73 @@ function buildTabs() {
   `).join('');
 }
 
+// ── Mini dashboard de contagem ────────────────────────────────
+function renderContagemDash() {
+  const el = document.getElementById('contagemDash');
+  if (!el) return;
+
+  const weekKey = state.semana;
+  let totalAll = 0, filledAll = 0;
+  const sectionStats = [];
+
+  for (const section of SECTIONS) {
+    if (section.key === 'RESUMO' || section.key === 'CMV') continue;
+    const sData = (state.data[section.key] || {})[weekKey] || {};
+    let filled = 0, total = 0;
+    for (const g of section.groups) {
+      for (const item of g.items) {
+        total++;
+        const d = sData[item.name] || {};
+        if (d.i !== undefined && d.f !== undefined) filled++;
+      }
+    }
+    sectionStats.push({ key: section.key, label: section.label, filled, total });
+    totalAll += total;
+    filledAll += filled;
+  }
+
+  const pct     = totalAll > 0 ? Math.round(filledAll / totalAll * 100) : 0;
+  const missing = totalAll - filledAll;
+  const pctColor = pct === 100 ? '#16a34a' : pct >= 60 ? '#f59e0b' : '#dc2626';
+
+  const lastCount = state.lastCountDate
+    ? new Date(state.lastCountDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  const chipsHtml = sectionStats.map(s => {
+    const cls = (s.filled === s.total && s.total > 0) ? 'cntdash-chip-done'
+      : s.filled > 0 ? 'cntdash-chip-partial'
+      : 'cntdash-chip-empty';
+    const icon = (s.filled === s.total && s.total > 0) ? '✓ ' : '';
+    return `<span class="cntdash-chip ${cls}" onclick="switchTab('${s.key}')">${icon}${escHtml(s.label)} <em>${s.filled}/${s.total}</em></span>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="cntdash-card">
+      <div class="cntdash-top-row">
+        <div class="cntdash-pct-block">
+          <span class="cntdash-pct" style="color:${pctColor}">${pct}%</span>
+          <span class="cntdash-pct-sub">concluído</span>
+        </div>
+        <div class="cntdash-info-block">
+          <span class="cntdash-counts">${filledAll} de ${totalAll} itens</span>
+          ${missing > 0
+            ? `<span class="cntdash-missing">${missing} item${missing !== 1 ? 'ns' : ''} pendente${missing !== 1 ? 's' : ''}</span>`
+            : `<span class="cntdash-done">Contagem completa ✓</span>`}
+          ${lastCount ? `<span class="cntdash-last">Última atualização: ${lastCount}</span>` : ''}
+        </div>
+      </div>
+      <div class="cntdash-bar-bg">
+        <div class="cntdash-bar-fill" style="width:${pct}%;background:${pctColor}"></div>
+      </div>
+      <div class="cntdash-chips">${chipsHtml}</div>
+    </div>`;
+}
+
 // ── Construção de seções ──────────────────────────────────────
 function buildSections() {
   const main = document.getElementById('view-contagem');
-  let html = '';
+  let html = '<div id="contagemDash" class="contagem-dash-wrap"></div>';
 
   for (const section of SECTIONS) {
     if (section.key === 'RESUMO') {
@@ -830,6 +894,7 @@ function buildSections() {
 
   // Restore saved values
   restoreValues();
+  renderContagemDash();
   updateSavedLabel();
 }
 
@@ -946,6 +1011,7 @@ function onFieldChange(sectionKey, itemName, field, rawValue) {
   updateConsumption(id);
   updateCardFilled(id);
   updateBadge(sectionKey);
+  renderContagemDash();
   scheduleSave();
 }
 
@@ -1181,6 +1247,7 @@ function switchWeek(weekKey) {
   state.semana = weekKey;
   updateWeekNav();
   restoreValues();
+  renderContagemDash();
   updateAllBadges();
   renderCMVPanel();
   saveState();
