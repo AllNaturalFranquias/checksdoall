@@ -1915,6 +1915,104 @@ body { padding-bottom: 62px; }
 }
 .cmv-nota-split:hover { color: #dc2626; }
 
+/* ── Contagem mini dashboard ─────────────────────────────── */
+.contagem-dash-wrap { padding: 12px 14px 4px; }
+.cntdash-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 14px 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+.cntdash-top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.cntdash-pct-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 52px;
+  padding-top: 2px;
+}
+.cntdash-pct {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.cntdash-pct-sub {
+  font-size: 9px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+.cntdash-info-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cntdash-counts {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+.cntdash-missing {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+.cntdash-done {
+  font-size: 12px;
+  font-weight: 700;
+  color: #16a34a;
+}
+.cntdash-last {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+.cntdash-bar-bg {
+  height: 6px;
+  background: #f3f4f6;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.cntdash-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.35s ease;
+}
+.cntdash-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cntdash-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.12s;
+}
+.cntdash-chip:active { opacity: 0.65; }
+.cntdash-chip em { font-style: normal; font-weight: 500; opacity: 0.75; }
+.cntdash-chip-done    { background: #dcfce7; color: #15803d; }
+.cntdash-chip-partial { background: #fef3c7; color: #b45309; }
+.cntdash-chip-empty   { background: #f3f4f6; color: #6b7280; }
+
 /* ── Comparativo view ────────────────────────────────────── */
 .comp-view { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .comp-section {
