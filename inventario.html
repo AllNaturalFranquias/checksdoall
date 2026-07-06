@@ -8,7 +8,7 @@
   <title>Controles Estoque</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="inventario.css?v=10">
+  <link rel="stylesheet" href="inventario.css?v=11">
 </head>
 <body>
 
@@ -348,6 +348,42 @@
     </button>
   </nav>
 
+  <!-- Fichas Técnicas overlay -->
+  <div class="fichas-overlay" id="fichasOverlay" style="display:none">
+    <div class="fichas-header">
+      <button class="fichas-back-btn" onclick="closeFichas()">← Voltar</button>
+      <span class="fichas-title">Fichas Técnicas</span>
+      <button class="fichas-new-btn" onclick="newFicha()">+ Nova</button>
+    </div>
+
+    <!-- List view -->
+    <div id="fichasListView">
+      <div class="fichas-cat-tabs" id="fichasCatTabs">
+        <button class="fichas-catbtn active" data-cat="all" onclick="filterFichas('all')">Todas</button>
+        <button class="fichas-catbtn" data-cat="base" onclick="filterFichas('base')">Base</button>
+        <button class="fichas-catbtn" data-cat="prato" onclick="filterFichas('prato')">Pratos</button>
+        <button class="fichas-catbtn" data-cat="salada" onclick="filterFichas('salada')">Saladas</button>
+        <button class="fichas-catbtn" data-cat="snack" onclick="filterFichas('snack')">Snacks</button>
+        <button class="fichas-catbtn" data-cat="cafe_manha" onclick="filterFichas('cafe_manha')">Café Manhã</button>
+        <button class="fichas-catbtn" data-cat="cafe" onclick="filterFichas('cafe')">Café</button>
+        <button class="fichas-catbtn" data-cat="suco" onclick="filterFichas('suco')">Sucos</button>
+      </div>
+      <div class="fichas-search-wrap">
+        <input class="fichas-search" type="text" placeholder="🔍 Buscar ficha..." oninput="searchFichas(this.value)">
+      </div>
+      <div id="fichasList" class="fichas-list"></div>
+    </div>
+
+    <!-- Edit view -->
+    <div id="fichasEditView" style="display:none">
+      <div class="fichas-edit-topbar">
+        <button class="fichas-back-btn" onclick="showFichasList()">← Fichas</button>
+        <button class="fichas-del-btn" onclick="deleteFichaById(fichasEditingId)">🗑 Excluir</button>
+      </div>
+      <div id="fichasEditContent" class="fichas-edit-content"></div>
+    </div>
+  </div>
+
   <!-- Modal: Dividir nota por linha -->
   <div class="inv-overlay" id="invSplitNotaOverlay">
     <div class="inv-modal">
@@ -361,6 +397,7 @@
     </div>
   </div>
 
-  <script src="inventario.js?v=10"></script>
+  <script src="fichas_const.js?v=1"></script>
+  <script src="inventario.js?v=11"></script>
 </body>
 </html>
