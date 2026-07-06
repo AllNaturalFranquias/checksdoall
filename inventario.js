@@ -629,7 +629,7 @@ function switchView(view) {
   document.querySelectorAll('.app-nav-item').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.view === view));
 
-  ['dashboard','contagem','cmv','config'].forEach(v => {
+  ['dashboard','contagem','cmv','config','comparativo'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
   });
@@ -640,9 +640,10 @@ function switchView(view) {
   if (invTabs)   invTabs.style.display   = view === 'contagem' ? '' : 'none';
   if (searchBar) searchBar.style.display = view === 'contagem' ? '' : 'none';
 
-  if (view === 'dashboard') renderDashboard();
-  if (view === 'cmv')       renderCMVPanel();
-  if (view === 'config')    renderConfigView();
+  if (view === 'dashboard')   renderDashboard();
+  if (view === 'cmv')         renderCMVPanel();
+  if (view === 'config')      renderConfigView();
+  if (view === 'comparativo') renderComparativo();
 }
 
 function renderDashboard() {
@@ -960,6 +961,11 @@ function onPriceChange(sectionKey, itemName, rawValue) {
     delete state.cotacoes[q][sectionKey][itemName];
   } else {
     state.cotacoes[q][sectionKey][itemName] = val;
+    // Histórico semanal de preços para Comparativo
+    if (!state.precoSem) state.precoSem = {};
+    if (!state.precoSem[state.semana]) state.precoSem[state.semana] = {};
+    if (!state.precoSem[state.semana][sectionKey]) state.precoSem[state.semana][sectionKey] = {};
+    state.precoSem[state.semana][sectionKey][itemName] = val;
   }
 
   const id = makeId(sectionKey, itemName);
@@ -2381,12 +2387,18 @@ async function confirmNFItems() {
   if (!state.cotacoes)    state.cotacoes = {};
   if (!state.cotacoes[q]) state.cotacoes[q] = {};
 
+  if (!state.precoSem) state.precoSem = {};
+  if (!state.precoSem[state.semana]) state.precoSem[state.semana] = {};
+
   let updatedPrices = 0;
   for (const item of included) {
     if (item.match && item.preco_unitario > 0) {
       const { sectionKey, itemName } = item.match;
       if (!state.cotacoes[q][sectionKey]) state.cotacoes[q][sectionKey] = {};
       state.cotacoes[q][sectionKey][itemName] = item.preco_unitario;
+      // Histórico semanal para Comparativo
+      if (!state.precoSem[state.semana][sectionKey]) state.precoSem[state.semana][sectionKey] = {};
+      state.precoSem[state.semana][sectionKey][itemName] = item.preco_unitario;
       updatedPrices++;
     }
   }
@@ -2974,6 +2986,169 @@ function saveSplitNota() {
 function closeSplitNota() {
   _splitNotaId = null;
   document.getElementById('invSplitNotaOverlay').classList.remove('open');
+}
+
+// ── Comparativo ───────────────────────────────────────────────
+const COMP_TRACKED = [
+  { section: 'COZINHA', item: 'Peito de Frango',  label: 'Frango' },
+  { section: 'COZINHA', item: 'Posta Branca',      label: 'Tilápia' },
+  { section: 'COZINHA', item: 'Bacon Cubos',       label: 'Bacon' },
+  { section: 'COZINHA', item: 'Queijo Muçarela',   label: 'Muçarela' },
+  { section: 'COZINHA', item: 'Queijo Parmesão',   label: 'Parmesão' },
+  { section: 'COZINHA', item: 'Muçarela Búfala',   label: 'M. Búfala' },
+];
+
+function renderComparativo() {
+  const el = document.getElementById('comparativoContent');
+  if (!el) return;
+
+  // 1. CMV por semana – últimas semanas com dados
+  const cmvWeeks = Object.entries(state.cmv || {})
+    .filter(([k]) => /^\d{4}-W\d{2}$/.test(k))
+    .sort(([a], [b]) => a < b ? -1 : 1)
+    .map(([k, d]) => {
+      const fat   = d?.faturamento || 0;
+      const gasto = (d?.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
+      const cmvPct = fat > 0 ? gasto / fat * 100 : null;
+      const meta   = d?.meta_pct || 30;
+      return { key: k, label: getWeekLabel(k), fat, gasto, cmvPct, meta };
+    })
+    .filter(w => w.fat > 0 || w.gasto > 0)
+    .slice(-10);
+
+  // 2. Preços monitorados – cotacoes (q1/q2) + precoSem (semanal)
+  const cotacoes = state.cotacoes || {};
+  const precoSem = state.precoSem  || {};
+  const semWeeks = Object.keys(precoSem).filter(k => /^\d{4}-W\d{2}$/.test(k)).sort();
+  const lastSemWeek = semWeeks[semWeeks.length - 1];
+  const prevSemWeek = semWeeks[semWeeks.length - 2];
+
+  // 3. Top fornecedores (all time)
+  const fornMap = {};
+  Object.values(state.cmv || {}).forEach(d => {
+    (d?.notas || []).forEach(n => {
+      const f = (n.fornecedor || 'Outros').trim();
+      fornMap[f] = (fornMap[f] || 0) + (n.valor || 0);
+    });
+  });
+  const totalForn = Object.values(fornMap).reduce((s, v) => s + v, 0);
+  const topForn   = Object.entries(fornMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+  // 4. Por linha de produto (all time)
+  const linhaMap = {};
+  Object.values(state.cmv || {}).forEach(d => {
+    calcLinhaBreakdown(d?.notas || [], null).forEach(b => {
+      linhaMap[b.linha] = (linhaMap[b.linha] || 0) + b.total;
+    });
+  });
+  const totalLinha = Object.values(linhaMap).reduce((s, v) => s + v, 0);
+  const topLinhas  = Object.entries(linhaMap).sort((a, b) => b[1] - a[1]);
+
+  // ── Render CMV histórico
+  const cmvHistHtml = cmvWeeks.length === 0
+    ? '<p class="comp-empty">Nenhuma semana com dados ainda.</p>'
+    : `<div class="comp-table-wrap">
+        <table class="comp-table">
+          <thead><tr><th>Semana</th><th>Fat.</th><th>Gasto</th><th>CMV</th></tr></thead>
+          <tbody>${cmvWeeks.map(w => {
+            const col = w.cmvPct == null ? '#9ca3af'
+              : w.cmvPct > w.meta * 1.1 ? '#ef4444'
+              : w.cmvPct > w.meta       ? '#f59e0b' : '#16a34a';
+            const isCur = w.key === state.semana;
+            return `<tr style="${isCur ? 'background:#fef9f9' : ''}">
+              <td style="${isCur ? 'font-weight:700' : ''}">${w.label}${isCur ? ' ←' : ''}</td>
+              <td>${w.fat > 0 ? 'R$ ' + fmt(w.fat) : '—'}</td>
+              <td>${w.gasto > 0 ? 'R$ ' + fmt(w.gasto) : '—'}</td>
+              <td style="font-weight:700;color:${col}">${w.cmvPct != null ? w.cmvPct.toFixed(1) + '%' : '—'}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+
+  // ── Render preços monitorados
+  const precosHtml = COMP_TRACKED.map(t => {
+    const q     = getQuinzena(state.semana);
+    const other = q === 'q1' ? 'q2' : 'q1';
+    const qCur  = ((cotacoes[q]     || {})[t.section] || {})[t.item];
+    const qPrev = ((cotacoes[other] || {})[t.section] || {})[t.item];
+    const sCur  = lastSemWeek ? ((precoSem[lastSemWeek] || {})[t.section] || {})[t.item] : undefined;
+    const sPrev = prevSemWeek ? ((precoSem[prevSemWeek] || {})[t.section] || {})[t.item] : undefined;
+
+    const price = qCur  ?? sCur;
+    const prev  = qPrev ?? sPrev;
+    let varHtml = '';
+    if (price != null && prev != null && prev > 0) {
+      const pct = (price - prev) / prev * 100;
+      const col = pct > 0 ? '#ef4444' : '#16a34a';
+      varHtml = `<span class="comp-preco-var" style="color:${col}">${pct > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</span>`;
+    }
+    return `<div class="comp-preco-card">
+      <span class="comp-preco-label">${escHtml(t.label)}</span>
+      <span class="comp-preco-val">${price != null ? 'R$ ' + price.toFixed(2).replace('.', ',') + '/kg' : '—'}</span>
+      ${varHtml}
+    </div>`;
+  }).join('');
+
+  // ── Render top fornecedores
+  const fornHtml = topForn.length === 0
+    ? '<p class="comp-empty">Nenhuma nota registrada ainda.</p>'
+    : topForn.map(([f, v], i) => {
+        const pct = totalForn > 0 ? v / totalForn * 100 : 0;
+        return `<div class="comp-forn-row">
+          <span class="comp-forn-rank">${i + 1}</span>
+          <div class="comp-forn-info">
+            <span class="comp-forn-nome">${escHtml(f)}</span>
+            <div class="comp-forn-bar-bg">
+              <div class="comp-forn-bar-fill" style="width:${pct.toFixed(1)}%"></div>
+            </div>
+          </div>
+          <div class="comp-forn-right">
+            <span class="comp-forn-val">R$ ${fmt(v)}</span>
+            <span class="comp-forn-pct">${pct.toFixed(1)}%</span>
+          </div>
+        </div>`;
+      }).join('');
+
+  // ── Render por linha
+  const linhaHtml = topLinhas.length === 0
+    ? '<p class="comp-empty">Nenhum dado de linha ainda.</p>'
+    : topLinhas.map(([l, v]) => {
+        const pct = totalLinha > 0 ? v / totalLinha * 100 : 0;
+        return `<div class="comp-linha-row">
+          <span class="comp-linha-nome">${escHtml(l)}</span>
+          <div class="comp-linha-bar-bg">
+            <div class="comp-linha-bar-fill" style="width:${pct.toFixed(1)}%"></div>
+          </div>
+          <div class="comp-linha-right">
+            <span class="comp-linha-val">R$ ${fmt(v)}</span>
+            <span class="comp-linha-pct">${pct.toFixed(1)}%</span>
+          </div>
+        </div>`;
+      }).join('');
+
+  el.innerHTML = `
+    <div class="comp-view">
+      <div class="comp-section">
+        <div class="comp-section-title">📈 CMV por Semana</div>
+        <div class="comp-section-sub">Histórico · últimas semanas com dados</div>
+        ${cmvHistHtml}
+      </div>
+      <div class="comp-section">
+        <div class="comp-section-title">💰 Preços Monitorados</div>
+        <div class="comp-section-sub">Frango · Tilápia · Bacon · Queijos — vs quinzena anterior</div>
+        <div class="comp-precos-grid">${precosHtml}</div>
+      </div>
+      <div class="comp-section">
+        <div class="comp-section-title">🏆 Top Fornecedores</div>
+        <div class="comp-section-sub">Total acumulado · R$ ${fmt(totalForn)}</div>
+        <div class="comp-forn-list">${fornHtml}</div>
+      </div>
+      <div class="comp-section">
+        <div class="comp-section-title">📦 Por Linha de Produto</div>
+        <div class="comp-section-sub">Acumulado total · R$ ${fmt(totalLinha)}</div>
+        <div class="comp-linhas-list">${linhaHtml}</div>
+      </div>
+    </div>`;
 }
 
 // ── Start ─────────────────────────────────────────────────────
