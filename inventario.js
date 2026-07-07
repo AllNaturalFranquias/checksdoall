@@ -601,7 +601,10 @@ async function init() {
 
   if (IS_ADMIN) {
     const logoutBtn = document.getElementById('invLogoutBtn');
-    if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+    if (logoutBtn) {
+      logoutBtn.style.display = 'inline-flex';
+      if (_session && _session.nome) logoutBtn.textContent = `↩ ${_session.nome}`;
+    }
   }
 
   loadState();
@@ -1293,18 +1296,36 @@ function updateWeekButtons() { updateWeekNav(); } // alias compat
 // ── PIN / Resumo ──────────────────────────────────────────────
 function checkPin() {
   const val = document.getElementById('invPin').value;
-  const validPins = [
-    ...(UNIT_ADMINS[UNIT_ID] || []).map(a => a.pin),
-    ...(UNIT_ADMINS.global   || []).map(a => a.pin),
-  ];
-  if (validPins.includes(val)) {
+  const globalAdmins = UNIT_ADMINS.global || [];
+  const unitAdmins   = UNIT_ADMINS[UNIT_ID] || [];
+
+  const globalMatch = globalAdmins.find(a => a.pin === val);
+  const unitMatch   = !globalMatch && unitAdmins.find(a => a.pin === val);
+
+  if (globalMatch || unitMatch) {
     document.getElementById('invOverlay').classList.remove('open');
-    if (window._pinCallback) {
-      window._pinCallback();
-      window._pinCallback = null;
-    } else {
-      renderResumo();
+
+    // Se já é admin (re-autenticação para ação específica), só executa callback
+    if (IS_ADMIN) {
+      if (window._pinCallback) {
+        window._pinCallback();
+        window._pinCallback = null;
+      } else {
+        renderResumo();
+      }
+      return;
     }
+
+    // Primeiro login: salva sessão e recarrega para IS_ADMIN ser reavaliado
+    const matchedAdmin = globalMatch || unitMatch;
+    const session = {
+      isAdmin:  true,
+      isGlobal: Boolean(globalMatch),
+      unidade:  UNIT_ID,
+      nome:     matchedAdmin.nome,
+    };
+    sessionStorage.setItem('inv_session', JSON.stringify(session));
+    location.reload();
   } else {
     const input = document.getElementById('invPin');
     input.classList.add('error');
