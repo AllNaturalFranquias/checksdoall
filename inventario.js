@@ -715,7 +715,7 @@ function renderDashboard() {
   const mesCur = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
   const notasMes = getNotasMes(mesCur);
   const gastoYTD = notasMes.reduce((s, n) => s + (n.valor || 0), 0);
-  const fatYTD   = getFatMes(mesCur);
+  const fatYTD   = state.dre?.[mesCur]?.faturamento_real || 0;
   const cmvYTD  = fatYTD > 0 ? gastoYTD / fatYTD * 100 : null;
   const ytdColor = cmvYTD == null ? '#9ca3af'
     : cmvYTD > pct * 1.1 ? '#ef4444'
@@ -2796,7 +2796,7 @@ function renderCMVPanel() {
   const _mesCur = `${_hoje.getFullYear()}-${String(_hoje.getMonth()+1).padStart(2,'0')}`;
   const _notasMes = getNotasMes(_mesCur);
   const gastoYTD = _notasMes.reduce((s, n) => s + (n.valor || 0), 0);
-  const fatYTD   = getFatMes(_mesCur);
+  const fatYTD   = state.dre?.[_mesCur]?.faturamento_real || 0;
   const cmvYTD   = fatYTD > 0 ? gastoYTD / fatYTD * 100 : null;
   const ytdColor = cmvYTD != null
     ? (cmvYTD > pct * 1.1 ? '#ef4444' : cmvYTD > pct ? '#f59e0b' : '#4ade80')
