@@ -2955,7 +2955,7 @@ function closeGeminiKeyModal() {
 const DEFAULT_LINHAS = [
   'Carnes Vermelhas', 'Frango', 'Pescados', 'Queijos e Laticínios',
   'Hortifruti', 'Alimentos', 'Bebidas', 'Embalagens',
-  'Sobremesas', 'Comida Funcionários', 'Limpeza', 'Outros'
+  'Sobremesas', 'Comida Funcionários', 'Limpeza', 'Motoboy', 'Outros'
 ];
 
 let linhasConfig = {
@@ -4067,6 +4067,8 @@ function renderDRE() {
   const maoObraPct = faturamento > 0 ? maoObra / faturamento * 100 : null;
 
   const desp = d.despesas || {};
+  const totalAdm = ['adm_prolabore','adm_aluguel','adm_condominio','adm_luz','adm_agua','adm_internet','adm_telefone']
+    .reduce((s, k) => s + (desp[k] || 0), 0);
   const totalDesp = Object.values(desp).reduce((s, v) => s + v, 0);
   const margContrib = receitaLiq - maoObra - totalCMV;
   const margPct = faturamento > 0 ? margContrib / faturamento * 100 : null;
@@ -4175,19 +4177,50 @@ function renderDRE() {
           <span class="dre-val" style="color:#ef4444">${totalDesp > 0 ? '− R$ '+fmt(totalDesp) : '—'}</span>
         </div>
 
+        <!-- Administrativa (subtotal auto) -->
+        <div class="dre-row dre-row-sub dre-row-group-hdr">
+          <span class="dre-label dre-label-group">Administrativa</span>
+          <span class="dre-pct" style="color:#9ca3af">${faturamento > 0 && totalAdm > 0 ? (totalAdm/faturamento*100).toFixed(1)+'%' : ''}</span>
+          <span class="dre-val dre-val-group">${totalAdm > 0 ? 'R$ '+fmt(totalAdm) : '—'}</span>
+        </div>
         ${[
-          ['administrativa',    'Administrativa'],
-          ['marketing',         'Marketing'],
-          ['informatica',       'Informática'],
-          ['manutencao',        'Manutenção'],
-          ['fin_tarifas',       'Financeiro – Tarifas'],
-          ['fin_juros',         'Financeiro – Juros'],
+          ['adm_prolabore',  'Pró-labore'],
+          ['adm_aluguel',    'Aluguel'],
+          ['adm_condominio', 'Condomínio'],
+          ['adm_luz',        'Luz'],
+          ['adm_agua',       'Água'],
+          ['adm_internet',   'Internet'],
+          ['adm_telefone',   'Telefone'],
+        ].map(([key, label]) => `
+          <div class="dre-row dre-row-sub2 dre-row-input">
+            <span class="dre-label dre-label-sub2">${label}</span>
+            <span class="dre-pct"></span>
+            <input class="dre-val-input" type="number" min="0" step="100"
+              value="${desp[key] || ''}" placeholder="0,00"
+              oninput="onDREChange('despesas','${key}',this.value)">
+          </div>`).join('')}
+
+        <!-- Royalties -->
+        <div class="dre-row dre-row-sub dre-row-input">
+          <span class="dre-label">Royalties</span>
+          <span class="dre-pct" style="color:#9ca3af">${faturamento > 0 && desp.royalties > 0 ? (desp.royalties/faturamento*100).toFixed(1)+'%' : ''}</span>
+          <input class="dre-val-input" type="number" min="0" step="100"
+            value="${desp.royalties || ''}" placeholder="0,00"
+            oninput="onDREChange('despesas','royalties',this.value)">
+        </div>
+
+        ${[
+          ['marketing',   'Marketing'],
+          ['informatica', 'Informática'],
+          ['manutencao',  'Manutenção'],
+          ['fin_tarifas', 'Financeiro – Tarifas'],
+          ['fin_juros',   'Financeiro – Juros'],
         ].map(([key, label]) => `
           <div class="dre-row dre-row-sub dre-row-input">
             <span class="dre-label">${label}</span>
             <span class="dre-pct"></span>
             <input class="dre-val-input" type="number" min="0" step="100"
-              value="${(desp[key] || '')}" placeholder="0,00"
+              value="${desp[key] || ''}" placeholder="0,00"
               oninput="onDREChange('despesas','${key}',this.value)">
           </div>`).join('')}
 
