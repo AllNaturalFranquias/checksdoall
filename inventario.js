@@ -2971,7 +2971,13 @@ async function loadLinhas() {
       { headers: supabaseHeaders() }
     );
     const rows = await res.json();
-    if (rows?.[0]?.estado) linhasConfig = { ...linhasConfig, ...rows[0].estado };
+    if (rows?.[0]?.estado) {
+      const saved = rows[0].estado;
+      linhasConfig = { ...linhasConfig, ...saved };
+      // Garante que todos os padrões existam (sem remover customizações do usuário)
+      const missing = DEFAULT_LINHAS.filter(l => !linhasConfig.linhas.includes(l));
+      if (missing.length) linhasConfig.linhas.push(...missing);
+    }
   } catch(e) {}
 }
 
@@ -4083,12 +4089,15 @@ function renderDRE() {
     return v < 10 ? '#22c55e' : v < 20 ? '#f59e0b' : '#ef4444';
   };
 
-  const linhasRows = Object.entries(cmvByLinha).sort((a,b) => b[1]-a[1]).map(([ln, v]) => {
-    const pct = faturamento > 0 ? v / faturamento * 100 : null;
+  // Mostra todas as linhas configuradas (com valor ou zeradas)
+  const todasLinhas = linhasConfig.linhas || DEFAULT_LINHAS;
+  const linhasRows = todasLinhas.map(ln => {
+    const v = cmvByLinha[ln] || 0;
+    const pct = faturamento > 0 && v > 0 ? v / faturamento * 100 : null;
     return `<div class="dre-row dre-row-sub">
-      <span class="dre-label">${escHtml(ln)}</span>
-      <span class="dre-pct" style="color:#9ca3af">${pct !== null ? pct.toFixed(1)+'%' : '—'}</span>
-      <span class="dre-val">${R(v)}</span>
+      <span class="dre-label" style="${v === 0 ? 'color:#9ca3af' : ''}">${escHtml(ln)}</span>
+      <span class="dre-pct" style="color:#9ca3af">${pct !== null ? pct.toFixed(1)+'%' : ''}</span>
+      <span class="dre-val" style="${v === 0 ? 'color:#d1d5db' : ''}">${v > 0 ? R(v) : '—'}</span>
     </div>`;
   }).join('');
 
