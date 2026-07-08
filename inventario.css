@@ -2613,3 +2613,8 @@ body { padding-bottom: 62px; }
   font-size: 11px; color: #9ca3af; text-align: center;
   margin-top: 12px; padding: 0 8px;
 }
+.dre-row-group-hdr { background: #fafafa; }
+.dre-label-group { font-weight: 600; color: #374151; font-size: 13px; }
+.dre-val-group { font-size: 13px; font-weight: 500; color: #374151; text-align: right; }
+.dre-row-sub2 { background: #fff; padding-left: 28px !important; }
+.dre-label-sub2 { color: #6b7280; font-size: 12px; }
