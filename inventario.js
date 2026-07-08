@@ -503,8 +503,15 @@ let state = {
   mesAtual: null, // 'YYYY-MM' — mês do ciclo atual
   data: {},       // { HORTI: { semana_1: { 'Alface': { i: 5, e: 3, f: 2 } } } }
   cotacoes: {},   // { q1: { HORTI: { 'Alface': 4.50 } }, q2: { ... } }
-  cmv: {}         // { semana_1: { faturamento: 100000, meta_pct: 30, notas: [] } }
+  cmv: {},        // { semana_1: { faturamento: 100000, meta_pct: 30, notas: [] } }
+  dre: {}         // { 'YYYY-MM': { impostos_pct, mao_obra_propria, mao_obra_terceiros, despesas: {} } }
 };
+
+// ── DRE: mês de navegação ─────────────────────────────────────
+let dreMesKey = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+})();
 
 // ── Calendário de semanas ─────────────────────────────────────
 // ── Semanas ISO (Segunda a Domingo) ──────────────────────────
@@ -639,7 +646,7 @@ function switchView(view) {
   document.querySelectorAll('.app-nav-item').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.view === view));
 
-  ['dashboard','contagem','cmv','config','comparativo'].forEach(v => {
+  ['dashboard','contagem','cmv','config','comparativo','dre'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
   });
@@ -655,6 +662,7 @@ function switchView(view) {
   if (view === 'cmv')         renderCMVPanel();
   if (view === 'config')      renderConfigView();
   if (view === 'comparativo') renderComparativo();
+  if (view === 'dre')         renderDRE();
 }
 
 function renderDashboard() {
@@ -992,9 +1000,9 @@ function restoreValues() {
         const eEl  = document.getElementById('e_' + id);
         const fEl  = document.getElementById('f_' + id);
         const pEl  = document.getElementById('p_' + id);
-        if (iEl && saved.i !== undefined) iEl.value = saved.i;
-        if (eEl && saved.e !== undefined) eEl.value = saved.e;
-        if (fEl && saved.f !== undefined) fEl.value = saved.f;
+        if (iEl) iEl.value = saved.i !== undefined ? saved.i : '';
+        if (eEl) eEl.value = saved.e !== undefined ? saved.e : '';
+        if (fEl) fEl.value = saved.f !== undefined ? saved.f : '';
 
         // Restaurar preço da quinzena atual
         const price = getItemPrice(section.key, item.name);
@@ -2946,7 +2954,8 @@ function closeGeminiKeyModal() {
 // ── Linhas de Produto ─────────────────────────────────────────
 const DEFAULT_LINHAS = [
   'Carnes Vermelhas', 'Frango', 'Pescados', 'Queijos e Laticínios',
-  'Hortifruti', 'Bebidas', 'Embalagens', 'Outros'
+  'Hortifruti', 'Alimentos', 'Bebidas', 'Embalagens',
+  'Sobremesas', 'Comida Funcionários', 'Limpeza', 'Outros'
 ];
 
 let linhasConfig = {
@@ -3967,6 +3976,232 @@ function deleteFichaById(id) {
   state.fichas = (state.fichas || []).filter(f => f.id !== id);
   scheduleSave();
   showFichasList();
+}
+
+// ── DRE Franqueado ────────────────────────────────────────────
+function getDREMesLabel(mesKey) {
+  const [yr, mo] = mesKey.split('-');
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${meses[parseInt(mo)-1]} ${yr}`;
+}
+
+function prevDREMes() {
+  const [yr, mo] = dreMesKey.split('-').map(Number);
+  const d = new Date(yr, mo - 2, 1);
+  dreMesKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderDRE();
+}
+
+function nextDREMes() {
+  const [yr, mo] = dreMesKey.split('-').map(Number);
+  const d = new Date(yr, mo, 1);
+  dreMesKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderDRE();
+}
+
+function getDREState(mesKey) {
+  if (!state.dre) state.dre = {};
+  if (!state.dre[mesKey]) state.dre[mesKey] = {
+    impostos_pct: 0,
+    mao_obra_propria: 0,
+    mao_obra_terceiros: 0,
+    despesas: {
+      administrativa: 0,
+      marketing: 0,
+      informatica: 0,
+      manutencao: 0,
+      fin_tarifas: 0,
+      fin_juros: 0
+    }
+  };
+  return state.dre[mesKey];
+}
+
+function onDREChange(field, subfield, rawVal) {
+  const d = getDREState(dreMesKey);
+  const val = parseFloat(rawVal) || 0;
+  if (subfield) {
+    if (!d[field]) d[field] = {};
+    d[field][subfield] = val;
+  } else {
+    d[field] = val;
+  }
+  scheduleSave();
+  renderDRE();
+}
+
+function renderDRE() {
+  const el = document.getElementById('dreContent');
+  if (!el) return;
+
+  const d = getDREState(dreMesKey);
+
+  // Auto: agregar semanas do mês
+  const weekKeys = Object.keys(state.cmv || {}).filter(k => /^\d{4}-W\d{2}$/.test(k));
+  const mesWeeks = weekKeys.filter(k => {
+    const mon = getWeekMonday(k);
+    return `${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}` === dreMesKey;
+  });
+
+  let faturamento = 0;
+  const cmvByLinha = {};
+  mesWeeks.forEach(wk => {
+    const wd = state.cmv[wk];
+    faturamento += wd?.faturamento || 0;
+    (wd?.notas || []).forEach(n => {
+      if (n.linhas?.length) {
+        n.linhas.forEach(l => { cmvByLinha[l.linha] = (cmvByLinha[l.linha] || 0) + (l.valor || 0); });
+      } else {
+        const ln = n.linha || 'Outros';
+        cmvByLinha[ln] = (cmvByLinha[ln] || 0) + (n.valor || 0);
+      }
+    });
+  });
+
+  const totalCMV = Object.values(cmvByLinha).reduce((s, v) => s + v, 0);
+  const cmvPctFat = faturamento > 0 ? totalCMV / faturamento * 100 : null;
+
+  const impostosR = faturamento * ((d.impostos_pct || 0) / 100);
+  const receitaLiq = faturamento - impostosR;
+  const maoObra = (d.mao_obra_propria || 0) + (d.mao_obra_terceiros || 0);
+  const maoObraPct = faturamento > 0 ? maoObra / faturamento * 100 : null;
+
+  const desp = d.despesas || {};
+  const totalDesp = Object.values(desp).reduce((s, v) => s + v, 0);
+  const margContrib = receitaLiq - maoObra - totalCMV;
+  const margPct = faturamento > 0 ? margContrib / faturamento * 100 : null;
+  const ebit = margContrib - totalDesp;
+  const ebitPct = faturamento > 0 ? ebit / faturamento * 100 : null;
+
+  const R = (v) => v ? 'R$ ' + fmt(v) : '—';
+  const P = (v) => v !== null ? v.toFixed(1) + '%' : '—';
+  const colorPct = (v, inv) => {
+    if (v === null) return '#9ca3af';
+    if (inv) return v > 0 ? '#22c55e' : '#ef4444';
+    return v < 10 ? '#22c55e' : v < 20 ? '#f59e0b' : '#ef4444';
+  };
+
+  const linhasRows = Object.entries(cmvByLinha).sort((a,b) => b[1]-a[1]).map(([ln, v]) => {
+    const pct = faturamento > 0 ? v / faturamento * 100 : null;
+    return `<div class="dre-row dre-row-sub">
+      <span class="dre-label">${escHtml(ln)}</span>
+      <span class="dre-pct" style="color:#9ca3af">${pct !== null ? pct.toFixed(1)+'%' : '—'}</span>
+      <span class="dre-val">${R(v)}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="dre-container">
+      <!-- Navegação de mês -->
+      <div class="dre-month-nav">
+        <button class="dre-nav-btn" onclick="prevDREMes()">‹</button>
+        <span class="dre-month-label">${getDREMesLabel(dreMesKey)}</span>
+        <button class="dre-nav-btn" onclick="nextDREMes()">›</button>
+      </div>
+
+      <div class="dre-card">
+        <!-- FATURAMENTO -->
+        <div class="dre-row dre-row-main">
+          <span class="dre-label">Faturamento Bruto</span>
+          <span class="dre-pct" style="color:#9ca3af">100%</span>
+          <span class="dre-val dre-val-fat">${R(faturamento)}</span>
+        </div>
+        ${faturamento === 0 ? `<p class="dre-hint">Insira faturamento nas semanas deste mês na aba CMV</p>` : ''}
+
+        <!-- IMPOSTOS -->
+        <div class="dre-row dre-row-sub">
+          <span class="dre-label">(-) Impostos</span>
+          <span class="dre-pct">
+            <input class="dre-pct-input" type="number" min="0" max="100" step="0.1"
+              value="${d.impostos_pct || ''}" placeholder="0"
+              oninput="onDREChange('impostos_pct',null,this.value)">%
+          </span>
+          <span class="dre-val" style="color:#ef4444">${impostosR > 0 ? '− R$ '+fmt(impostosR) : '—'}</span>
+        </div>
+
+        <!-- RECEITA LÍQUIDA -->
+        <div class="dre-row dre-row-total">
+          <span class="dre-label">(=) Receita Líquida</span>
+          <span class="dre-pct"></span>
+          <span class="dre-val">${R(receitaLiq)}</span>
+        </div>
+
+        <div class="dre-divider"></div>
+
+        <!-- MÃO DE OBRA -->
+        <div class="dre-row dre-row-main">
+          <span class="dre-label">(-) Mão de Obra</span>
+          <span class="dre-pct" style="color:${colorPct(maoObraPct, false)}">${P(maoObraPct)}</span>
+          <span class="dre-val" style="color:#ef4444">${maoObra > 0 ? '− R$ '+fmt(maoObra) : '—'}</span>
+        </div>
+        <div class="dre-row dre-row-sub dre-row-input">
+          <span class="dre-label">Própria (CLT + encargos)</span>
+          <span class="dre-pct"></span>
+          <input class="dre-val-input" type="number" min="0" step="100"
+            value="${d.mao_obra_propria || ''}" placeholder="0,00"
+            oninput="onDREChange('mao_obra_propria',null,this.value)">
+        </div>
+        <div class="dre-row dre-row-sub dre-row-input">
+          <span class="dre-label">Terceirizada</span>
+          <span class="dre-pct"></span>
+          <input class="dre-val-input" type="number" min="0" step="100"
+            value="${d.mao_obra_terceiros || ''}" placeholder="0,00"
+            oninput="onDREChange('mao_obra_terceiros',null,this.value)">
+        </div>
+
+        <div class="dre-divider"></div>
+
+        <!-- CMV -->
+        <div class="dre-row dre-row-main">
+          <span class="dre-label">(-) CMV</span>
+          <span class="dre-pct" style="color:${colorPct(cmvPctFat, false)}">${P(cmvPctFat)}</span>
+          <span class="dre-val" style="color:#ef4444">${totalCMV > 0 ? '− R$ '+fmt(totalCMV) : '—'}</span>
+        </div>
+        ${linhasRows || `<div class="dre-row dre-row-sub"><span class="dre-label" style="color:#9ca3af">Sem notas neste mês</span><span class="dre-pct"></span><span class="dre-val">—</span></div>`}
+
+        <!-- MARGEM DE CONTRIBUIÇÃO -->
+        <div class="dre-row dre-row-total">
+          <span class="dre-label">(=) Margem de Contribuição</span>
+          <span class="dre-pct" style="color:${colorPct(margPct, true)}">${P(margPct)}</span>
+          <span class="dre-val" style="color:${margContrib >= 0 ? '#22c55e' : '#ef4444'}">${R(margContrib)}</span>
+        </div>
+
+        <div class="dre-divider"></div>
+
+        <!-- DESPESAS OPERACIONAIS -->
+        <div class="dre-row dre-row-main">
+          <span class="dre-label">(-) Despesas Operacionais</span>
+          <span class="dre-pct" style="color:#9ca3af">${faturamento > 0 ? (totalDesp/faturamento*100).toFixed(1)+'%' : '—'}</span>
+          <span class="dre-val" style="color:#ef4444">${totalDesp > 0 ? '− R$ '+fmt(totalDesp) : '—'}</span>
+        </div>
+
+        ${[
+          ['administrativa',    'Administrativa'],
+          ['marketing',         'Marketing'],
+          ['informatica',       'Informática'],
+          ['manutencao',        'Manutenção'],
+          ['fin_tarifas',       'Financeiro – Tarifas'],
+          ['fin_juros',         'Financeiro – Juros'],
+        ].map(([key, label]) => `
+          <div class="dre-row dre-row-sub dre-row-input">
+            <span class="dre-label">${label}</span>
+            <span class="dre-pct"></span>
+            <input class="dre-val-input" type="number" min="0" step="100"
+              value="${(desp[key] || '')}" placeholder="0,00"
+              oninput="onDREChange('despesas','${key}',this.value)">
+          </div>`).join('')}
+
+        <!-- EBIT -->
+        <div class="dre-row dre-row-total dre-row-ebit">
+          <span class="dre-label">(=) Resultado (EBIT)</span>
+          <span class="dre-pct" style="color:${colorPct(ebitPct, true)}">${P(ebitPct)}</span>
+          <span class="dre-val" style="color:${ebit >= 0 ? '#22c55e' : '#ef4444'}">${R(ebit)}</span>
+        </div>
+      </div>
+
+      <p class="dre-footer-hint">Faturamento e CMV puxados automaticamente das semanas do mês. Demais valores inseridos manualmente.</p>
+    </div>
+  `;
 }
 
 // ── Start ─────────────────────────────────────────────────────
