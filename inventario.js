@@ -564,6 +564,36 @@ function getNextWeekKey(weekKey) {
   return getWeekKey(mon);
 }
 
+// Retorna true se nota.data (DD/MM/YYYY) cai dentro do mês 'YYYY-MM'
+function notaInMes(nota, mesKey) {
+  if (!nota?.data) return false;
+  const p = nota.data.split('/');
+  if (p.length !== 3) return false;
+  return `${p[2]}-${p[1].padStart(2,'0')}` === mesKey;
+}
+
+// Agrega notas de todas as semanas filtrando por data real da nota
+function getNotasMes(mesKey) {
+  const notas = [];
+  Object.values(state.cmv || {}).forEach(dw => {
+    (dw?.notas || []).forEach(n => { if (notaInMes(n, mesKey)) notas.push(n); });
+  });
+  return notas;
+}
+
+// Soma faturamento semanal das semanas com segunda-feira no mês (denominador operacional)
+function getFatMes(mesKey) {
+  let fat = 0;
+  const [yr, mo] = mesKey.split('-').map(Number);
+  Object.entries(state.cmv || {}).forEach(([key, dw]) => {
+    if (!/^\d{4}-W\d{2}$/.test(key)) return;
+    const mon = getWeekMonday(key);
+    if (mon.getFullYear() === yr && mon.getMonth() + 1 === mo && dw?.faturamento > 0)
+      fat += dw.faturamento;
+  });
+  return fat;
+}
+
 // ── Helpers de cotação ────────────────────────────────────────
 function getQuinzena(semana) {
   if (typeof semana === 'string' && semana.includes('-W')) {
@@ -682,15 +712,10 @@ function renderDashboard() {
     : cmvReal > pct       ? '#f59e0b' : '#22c55e';
 
   const hoje = new Date();
-  const mesAtualNum = hoje.getFullYear() * 100 + (hoje.getMonth() + 1);
-  let gastoYTD = 0, fatYTD = 0;
-  Object.entries(state.cmv || {}).forEach(([key, dw]) => {
-    if (!/^\d{4}-W\d{2}$/.test(key)) return;
-    const mon = getWeekMonday(key);
-    if (mon.getFullYear() * 100 + (mon.getMonth() + 1) !== mesAtualNum) return;
-    gastoYTD += (dw.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
-    if (dw.faturamento > 0) fatYTD += dw.faturamento;
-  });
+  const mesCur = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  const notasMes = getNotasMes(mesCur);
+  const gastoYTD = notasMes.reduce((s, n) => s + (n.valor || 0), 0);
+  const fatYTD   = getFatMes(mesCur);
   const cmvYTD  = fatYTD > 0 ? gastoYTD / fatYTD * 100 : null;
   const ytdColor = cmvYTD == null ? '#9ca3af'
     : cmvYTD > pct * 1.1 ? '#ef4444'
@@ -2768,15 +2793,10 @@ function renderCMVPanel() {
 
   // YTD mês
   const _hoje = new Date();
-  const _mesNum = _hoje.getFullYear() * 100 + (_hoje.getMonth() + 1);
-  let gastoYTD = 0, fatYTD = 0;
-  Object.entries(state.cmv || {}).forEach(([key, dw]) => {
-    if (!/^\d{4}-W\d{2}$/.test(key)) return;
-    const mon = getWeekMonday(key);
-    if (mon.getFullYear() * 100 + (mon.getMonth() + 1) !== _mesNum) return;
-    gastoYTD += (dw.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
-    if (dw.faturamento > 0) fatYTD += dw.faturamento;
-  });
+  const _mesCur = `${_hoje.getFullYear()}-${String(_hoje.getMonth()+1).padStart(2,'0')}`;
+  const _notasMes = getNotasMes(_mesCur);
+  const gastoYTD = _notasMes.reduce((s, n) => s + (n.valor || 0), 0);
+  const fatYTD   = getFatMes(_mesCur);
   const cmvYTD   = fatYTD > 0 ? gastoYTD / fatYTD * 100 : null;
   const ytdColor = cmvYTD != null
     ? (cmvYTD > pct * 1.1 ? '#ef4444' : cmvYTD > pct ? '#f59e0b' : '#4ade80')
@@ -4042,26 +4062,18 @@ function renderDRE() {
 
   const d = getDREState(dreMesKey);
 
-  // Auto: agregar semanas do mês
-  const weekKeys = Object.keys(state.cmv || {}).filter(k => /^\d{4}-W\d{2}$/.test(k));
-  const mesWeeks = weekKeys.filter(k => {
-    const mon = getWeekMonday(k);
-    return `${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}` === dreMesKey;
-  });
+  // Faturamento real: campo manual do fechamento do mês
+  const faturamento = d.faturamento_real || 0;
 
-  let faturamento = 0;
+  // CMV: filtra por data real da nota (DD/MM/YYYY) dentro do mês
   const cmvByLinha = {};
-  mesWeeks.forEach(wk => {
-    const wd = state.cmv[wk];
-    faturamento += wd?.faturamento || 0;
-    (wd?.notas || []).forEach(n => {
-      if (n.linhas?.length) {
-        n.linhas.forEach(l => { cmvByLinha[l.linha] = (cmvByLinha[l.linha] || 0) + (l.valor || 0); });
-      } else {
-        const ln = n.linha || 'Outros';
-        cmvByLinha[ln] = (cmvByLinha[ln] || 0) + (n.valor || 0);
-      }
-    });
+  getNotasMes(dreMesKey).forEach(n => {
+    if (n.linhas?.length) {
+      n.linhas.forEach(l => { cmvByLinha[l.linha] = (cmvByLinha[l.linha] || 0) + (l.valor || 0); });
+    } else {
+      const ln = n.linha || 'Outros';
+      cmvByLinha[ln] = (cmvByLinha[ln] || 0) + (n.valor || 0);
+    }
   });
 
   const totalCMV = Object.values(cmvByLinha).reduce((s, v) => s + v, 0);
@@ -4111,13 +4123,19 @@ function renderDRE() {
       </div>
 
       <div class="dre-card">
-        <!-- FATURAMENTO -->
+        <!-- FATURAMENTO REAL -->
         <div class="dre-row dre-row-main">
           <span class="dre-label">Faturamento Bruto</span>
           <span class="dre-pct" style="color:#9ca3af">100%</span>
-          <span class="dre-val dre-val-fat">${R(faturamento)}</span>
+          <span class="dre-val dre-val-fat">${faturamento > 0 ? R(faturamento) : '—'}</span>
         </div>
-        ${faturamento === 0 ? `<p class="dre-hint">Insira faturamento nas semanas deste mês na aba CMV</p>` : ''}
+        <div class="dre-row dre-row-sub dre-row-input">
+          <span class="dre-label" style="color:#6b7280;font-size:12px">Extrato (fechamento do mês)</span>
+          <span class="dre-pct"></span>
+          <input class="dre-val-input" type="number" min="0" step="100"
+            value="${d.faturamento_real || ''}" placeholder="0,00"
+            oninput="onDREChange('faturamento_real',null,this.value)">
+        </div>
 
         <!-- IMPOSTOS -->
         <div class="dre-row dre-row-sub">
