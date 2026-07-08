@@ -4079,7 +4079,7 @@ function renderDRE() {
   const totalCMV = Object.values(cmvByLinha).reduce((s, v) => s + v, 0);
   const cmvPctFat = faturamento > 0 ? totalCMV / faturamento * 100 : null;
 
-  const impostosR = faturamento * ((d.impostos_pct || 0) / 100);
+  const impostosR = d.impostos_valor || 0;
   const receitaLiq = faturamento - impostosR;
   const maoObra = (d.mao_obra_propria || 0) + (d.mao_obra_terceiros || 0);
   const maoObraPct = faturamento > 0 ? maoObra / faturamento * 100 : null;
@@ -4138,14 +4138,12 @@ function renderDRE() {
         </div>
 
         <!-- IMPOSTOS -->
-        <div class="dre-row dre-row-sub">
+        <div class="dre-row dre-row-sub dre-row-input">
           <span class="dre-label">(-) Impostos</span>
-          <span class="dre-pct">
-            <input class="dre-pct-input" type="number" min="0" max="100" step="0.1"
-              value="${d.impostos_pct || ''}" placeholder="0"
-              oninput="onDREChange('impostos_pct',null,this.value)">%
-          </span>
-          <span class="dre-val" style="color:#ef4444">${impostosR > 0 ? '− R$ '+fmt(impostosR) : '—'}</span>
+          <span class="dre-pct" style="color:#9ca3af">${faturamento > 0 && impostosR > 0 ? (impostosR/faturamento*100).toFixed(1)+'%' : ''}</span>
+          <input class="dre-val-input" type="number" min="0" step="100"
+            value="${d.impostos_valor || ''}" placeholder="0,00"
+            oninput="onDREChange('impostos_valor',null,this.value)">
         </div>
 
         <!-- RECEITA LÍQUIDA -->
