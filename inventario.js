@@ -2569,7 +2569,8 @@ async function confirmNFItems() {
   if (!d.notas) d.notas = [];
   const linha = document.getElementById('nfRevLinha')?.value || 'Outros';
   learnFornecedorLinha(fornecedor, linha);
-  d.notas.push({ id: Date.now().toString(36), fornecedor, linha, valor: total, data: dataFmt });
+  const itensResumo = included.map(i => ({ nome: i.nome || i.descricao || '', valor: i.preco_total || 0 })).filter(i => i.nome);
+  d.notas.push({ id: Date.now().toString(36), fornecedor, linha, valor: total, data: dataFmt, itens: itensResumo.length ? itensResumo : undefined });
 
   // Atualizar cotações com preços lidos
   const q = getQuinzena(state.semana);
@@ -2764,10 +2765,19 @@ function renderCMVPanel() {
         const linhasDisplay = n.linhas?.length
           ? n.linhas.map(l => `<span class="cmv-panel-nota-linha">${escHtml(l.linha)} R$ ${fmt(l.valor)}</span>`).join('')
           : n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>` : '<span class="cmv-panel-nota-linha" style="color:#f59e0b">sem linha</span>';
+        const itensHtml = n.itens?.length ? `
+          <div class="cmv-nota-itens" id="itens-${n.id}" style="display:none">
+            ${n.itens.map(it => `<div class="cmv-nota-item-row"><span class="cmv-nota-item-nome">${escHtml(it.nome)}</span><span class="cmv-nota-item-val">R$ ${fmt(it.valor)}</span></div>`).join('')}
+          </div>` : '';
+        const toggleBtn = n.itens?.length ? `<button class="cmv-nota-itens-toggle" onclick="toggleNotaItens('${n.id}',this)" title="Ver itens">▾</button>` : '';
         return `<div class="cmv-panel-nota">
           <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
-            <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
+            <div style="display:flex;align-items:center;gap:4px">
+              ${toggleBtn}
+              <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
+            </div>
             <div style="display:flex;flex-wrap:wrap;gap:4px">${linhasDisplay}</div>
+            ${itensHtml}
           </div>
           <span class="cmv-panel-nota-data">${n.data || ''}</span>
           <span class="cmv-panel-nota-val">R$ ${fmt(n.valor)}</span>
@@ -2958,6 +2968,14 @@ async function testGeminiKey() {
   }
   btn.textContent = '🔍 Testar chave';
   btn.disabled = false;
+}
+
+function toggleNotaItens(id, btn) {
+  const el = document.getElementById('itens-' + id);
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? '▾' : '▴';
 }
 
 function toggleNotasDrawer(btn) {
