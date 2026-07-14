@@ -2100,6 +2100,46 @@ body { padding-bottom: 62px; }
 }
 .cmv-nota-split:hover { color: #dc2626; }
 
+.cmv-nota-itens-toggle {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.cmv-nota-itens-toggle:hover { color: #111; }
+.cmv-nota-itens {
+  margin-top: 6px;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cmv-nota-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: #4b5563;
+}
+.cmv-nota-item-nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmv-nota-item-val {
+  flex-shrink: 0;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Contagem mini dashboard ─────────────────────────────── */
 .contagem-dash-wrap { padding: 12px 14px 4px; }
 .cntdash-card {
