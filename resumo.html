@@ -157,14 +157,46 @@
       return r >= 1 ? '#ef4444' : r >= 0.85 ? '#f59e0b' : '#22c55e';
     }
 
+    /* ── Helpers de data ── */
+    function parseDDMMYYYY(s) {
+      if (!s) return null;
+      // DD/MM/YYYY
+      const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (m) return new Date(+m[3], +m[2]-1, +m[1]);
+      return new Date(s);
+    }
+    function getWeekMonday(weekKey) {
+      if (!weekKey || !weekKey.includes('-W')) return new Date();
+      const [yr, wStr] = weekKey.split('-W');
+      const week = parseInt(wStr);
+      const jan4 = new Date(+yr, 0, 4);
+      const jan4Day = jan4.getDay() || 7;
+      const week1Mon = new Date(jan4 - (jan4Day - 1) * 86400000);
+      return new Date(week1Mon.getTime() + (week - 1) * 7 * 86400000);
+    }
+    function getWeekLabel(weekKey) {
+      if (!weekKey || !weekKey.includes('-W')) return weekKey || '—';
+      const mon = getWeekMonday(weekKey);
+      const sun = new Date(mon.getTime() + 6 * 86400000);
+      const f = d => d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
+      const wNum = parseInt(weekKey.split('-W')[1]);
+      return `Sem. ${wNum} · ${f(mon)} – ${f(sun)}`;
+    }
+
     /* ── Calcula métricas por unidade ── */
     function calcUnit(data) {
       const cmv = data?.cmv || {};
       const weeks = [];
       let monthFat = 0, monthGasto = 0, monthCount = 0, monthMetaSum = 0;
 
-      for (let w = 1; w <= 4; w++) {
-        const d     = cmv['semana_' + w] || {};
+      // Ordena semanas ISO mais recentes primeiro — pega as últimas 4
+      const allKeys = Object.keys(cmv).filter(k => k.includes('-W') || k.startsWith('semana_'));
+      const isoKeys = allKeys.filter(k => k.includes('-W')).sort().reverse();
+      const legacyKeys = allKeys.filter(k => k.startsWith('semana_')).sort().reverse();
+      const sortedKeys = [...isoKeys, ...legacyKeys].slice(0, 4).reverse();
+
+      sortedKeys.forEach((key, idx) => {
+        const d     = cmv[key] || {};
         const fat   = d.faturamento || 0;
         const meta  = d.meta_pct || 30;
         const notas = d.notas || [];
@@ -172,23 +204,29 @@
         const real  = fat > 0 ? (gasto / fat) * 100 : null;
         const metaV = fat > 0 ? fat * meta / 100 : null;
         const prog  = metaV ? Math.min(gasto / metaV * 100, 100) : 0;
-        weeks.push({ w, fat, meta, gasto, real, metaV, prog, notas });
+        const label = key.includes('-W') ? getWeekLabel(key) : `Sem. ${idx+1}`;
+        weeks.push({ w: idx + 1, key, label, fat, meta, gasto, real, metaV, prog, notas });
         if (fat > 0) {
           monthFat   += fat;
           monthGasto += gasto;
           monthMetaSum += meta;
           monthCount++;
         }
-      }
+      });
 
       const monthReal = monthFat > 0 ? (monthGasto / monthFat) * 100 : null;
       const monthMeta = monthCount > 0 ? monthMetaSum / monthCount : 30;
 
-      // Última NF
+      // Última NF — comparação por data real (DD/MM/YYYY)
       let lastNF = null;
+      let lastNFts = 0;
       for (const wk of weeks) {
         for (const n of wk.notas) {
-          if (n.data && (!lastNF || n.data > lastNF)) lastNF = n.data;
+          if (n.data) {
+            const d = parseDDMMYYYY(n.data);
+            const ts = d ? d.getTime() : 0;
+            if (ts > lastNFts) { lastNFts = ts; lastNF = n.data; }
+          }
         }
       }
 
@@ -196,14 +234,18 @@
       const linhaMap = {};
       for (const wk of weeks) {
         for (const n of wk.notas) {
-          const l = n.linha || 'Outros';
-          linhaMap[l] = (linhaMap[l] || 0) + (n.valor || 0);
+          if (n.linhas?.length) {
+            n.linhas.forEach(l => { linhaMap[l.linha || 'Outros'] = (linhaMap[l.linha || 'Outros'] || 0) + (l.valor || 0); });
+          } else {
+            const l = n.linha || 'Outros';
+            linhaMap[l] = (linhaMap[l] || 0) + (n.valor || 0);
+          }
         }
       }
       const linhas = Object.entries(linhaMap).sort((a,b) => b[1]-a[1]);
 
       return { weeks, monthReal, monthMeta, monthCount, monthFat, monthGasto,
-               lastNF, lastCount: data?.lastCountDate || null, linhas };
+               lastNF, lastNFts, lastCount: data?.lastCountDate || null, linhas };
     }
 
     /* ── Card de unidade ── */
@@ -231,7 +273,7 @@
         if (wk.fat === 0) return `
           <div class="r-week-row">
             <div class="r-week-info">
-              <span class="r-week-name">Sem. ${wk.w}</span>
+              <span class="r-week-name" style="font-size:11px">${wk.label}</span>
               <span class="r-week-empty">sem faturamento</span>
             </div>
           </div>`;
@@ -239,7 +281,7 @@
         return `
           <div class="r-week-row">
             <div class="r-week-info">
-              <span class="r-week-name">Sem. ${wk.w}</span>
+              <span class="r-week-name" style="font-size:11px">${wk.label}</span>
               <div class="r-week-stats">
                 <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
                 <span class="r-week-stat">CMV <strong style="color:${col}">${wk.real.toFixed(1)}%</strong> <span style="color:#94a3b8">/ ${wk.meta}%</span></span>
@@ -251,8 +293,8 @@
           </div>`;
       }).join('');
 
-      // Datas
-      const nfDays  = m.lastNF  ? daysSince(m.lastNF + 'T12:00:00') : null;
+      // Datas — lastNF já é DD/MM/YYYY, converte via parseDDMMYYYY para daysSince
+      const nfDays  = m.lastNFts > 0 ? Math.floor((Date.now() - m.lastNFts) / 86400000) : null;
       const cntDays = daysSince(m.lastCount);
       const nfChip  = nfDays  != null && nfDays  > 14 ? 'alert' : nfDays  != null ? 'good' : '';
       const cntChip = cntDays != null && cntDays > 10 ? 'alert' : cntDays != null ? 'good' : '';
@@ -282,7 +324,7 @@
           <div class="r-dates">
             <div class="r-date-chip ${nfChip}">
               <div class="r-date-label">Última NF</div>
-              <div class="r-date-val ${nfCls}">${m.lastNF ? fmtDate(m.lastNF + 'T12:00:00') : '—'}</div>
+              <div class="r-date-val ${nfCls}">${m.lastNF ? m.lastNF.slice(0,5) : '—'}</div>
               <div class="r-date-sub">${nfDays != null ? nfDays + ' dias atrás' : 'sem registro'}</div>
             </div>
             <div class="r-date-chip ${cntChip}">
