@@ -1,0 +1,32 @@
+name: Relatório Semanal por Loja
+
+on:
+  schedule:
+    # Toda terça-feira às 08:00 BRT = 11:00 UTC
+    - cron: '0 11 * * 2'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Teste sem enviar email (true/false)'
+        default: 'false'
+
+jobs:
+  enviar-relatorio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: npm install nodemailer
+
+      - name: Gerar e enviar relatório
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASS: ${{ secrets.GMAIL_PASS }}
+        run: node scripts/relatorio.mjs
