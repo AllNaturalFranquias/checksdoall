@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 // ── Configuração Supabase ─────────────────────────────────────
 // Cole aqui as credenciais do seu projeto Supabase
@@ -3103,16 +3103,20 @@ function emailRelatorio() {
 }
 
 // ── Detalhe de Nota (overlay full-screen) ─────────────────────
-let _notaDetailWeekKey = null;
-let _notaDetailId      = null;
-let _notaDetailSplits  = [];
+let _notaDetailWeekKey   = null;
+let _notaDetailId        = null;
+let _notaDetailSplits    = [];
+let _notaDetailFornecedor = '';
+let _notaDetailData       = '';
 
 function openNotaDetail(notaId) {
   const d = getCMVData(state.semana);
   const nota = (d.notas || []).find(n => n.id === notaId);
   if (!nota) return;
-  _notaDetailWeekKey = state.semana;
-  _notaDetailId = notaId;
+  _notaDetailWeekKey    = state.semana;
+  _notaDetailId         = notaId;
+  _notaDetailFornecedor = nota.fornecedor || '';
+  _notaDetailData       = nota.data || '';
   _notaDetailSplits = JSON.parse(JSON.stringify(
     nota.itens?.length
       ? nota.itens.map(it => ({ nome: it.nome, valor: it.valor || 0, linha: it.linha || nota.linha || (linhasConfig.linhas[0] || 'Outros') }))
@@ -3131,81 +3135,108 @@ function renderNotaDetail() {
   const d = getCMVData(_notaDetailWeekKey);
   const nota = (d.notas || []).find(n => n.id === _notaDetailId);
   if (!nota) return;
-  const linhaOpts = (linhasConfig.linhas || []).map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
-  const hasItens = nota.itens?.length > 0;
+
+  // Converte DD/MM/YYYY → YYYY-MM-DD para input date
+  const dataInputVal = (() => {
+    const s = _notaDetailData;
+    if (!s) return '';
+    const p = s.split('/');
+    return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : '';
+  })();
 
   const rows = _notaDetailSplits.map((row, i) => `
     <div class="ndet-item-row">
-      <div class="ndet-item-nome">${escHtml(row.nome)}</div>
+      <input class="ndet-item-nome-inp" type="text" value="${escHtml(row.nome)}" placeholder="Item"
+        oninput="_notaDetailSplits[${i}].nome=this.value">
       <select class="ndet-item-linha" onchange="_notaDetailSplits[${i}].linha=this.value;notaDetailUpdateResto()">
         ${(linhasConfig.linhas || []).map(l => `<option value="${escHtml(l)}"${row.linha===l?' selected':''}>${escHtml(l)}</option>`).join('')}
       </select>
       <input class="ndet-item-val" type="number" step="0.01" min="0"
         value="${row.valor.toFixed(2)}"
         oninput="_notaDetailSplits[${i}].valor=parseFloat(this.value)||0;notaDetailUpdateResto()">
+      <button class="ndet-item-del" onclick="_notaDetailSplits.splice(${i},1);renderNotaDetail()" title="Remover">✕</button>
     </div>`).join('');
 
   const el = document.getElementById('notaDetailContent');
   el.innerHTML = `
-    <div class="ndet-header-info">
-      <div class="ndet-fornecedor">${escHtml(nota.fornecedor || '—')}</div>
-      <div class="ndet-meta">
-        <span>${nota.data || '—'}</span>
-        <span class="ndet-total">R$ ${fmt(nota.valor)}</span>
+    <div class="ndet-edit-header">
+      <div class="ndet-edit-row">
+        <label class="ndet-edit-label">Fornecedor</label>
+        <input class="ndet-edit-inp" type="text" value="${escHtml(_notaDetailFornecedor)}" placeholder="Fornecedor"
+          oninput="_notaDetailFornecedor=this.value">
+      </div>
+      <div class="ndet-edit-row">
+        <label class="ndet-edit-label">Data</label>
+        <input class="ndet-edit-inp" type="date" value="${dataInputVal}"
+          oninput="_notaDetailData=this.value?new Date(this.value+'T12:00:00').toLocaleDateString('pt-BR'):''">
       </div>
     </div>
     <div class="ndet-linhas-header">
-      <span>${hasItens ? 'Itens da nota — atribua cada item a uma linha de CMV' : 'Linhas de CMV'}</span>
+      <span>Itens — nome · linha CMV · valor</span>
+      <span class="ndet-total-label" id="notaDetailTotal">Total: R$ ${fmt(nota.valor)}</span>
     </div>
     <div class="ndet-items-list">${rows}</div>
+    <button class="ndet-add-item-btn" onclick="addNotaDetailItem()">+ Adicionar item</button>
     <div class="ndet-resto" id="notaDetailResto"></div>
-    ${hasItens ? '<p class="ndet-hint">Altere a linha de cada item e salve para distribuir o CMV.</p>' : ''}
     <div class="ndet-actions">
-      <button class="ndet-save-btn" onclick="saveNotaDetailSplit()">✓ Salvar distribuição</button>
-      <button class="ndet-edit-btn" onclick="closeNotaDetail();openEditNota('${nota.id}')">✏️ Editar nota</button>
+      <button class="ndet-save-btn" onclick="saveNotaDetailSplit()">✓ Salvar alterações</button>
     </div>`;
   notaDetailUpdateResto();
 }
 
+function addNotaDetailItem() {
+  _notaDetailSplits.push({ nome: '', valor: 0, linha: linhasConfig.linhas[0] || 'Outros' });
+  renderNotaDetail();
+  // Foca no último input de nome
+  const inputs = document.querySelectorAll('.ndet-item-nome-inp');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
 function notaDetailUpdateResto() {
-  const d = getCMVData(_notaDetailWeekKey);
-  const nota = (d.notas || []).find(n => n.id === _notaDetailId);
-  if (!nota) return;
   const total = _notaDetailSplits.reduce((s, r) => s + r.valor, 0);
-  const resto = +(nota.valor - total).toFixed(2);
+  const totalEl = document.getElementById('notaDetailTotal');
+  if (totalEl) totalEl.textContent = `Total: R$ ${fmt(total)}`;
   const el = document.getElementById('notaDetailResto');
   if (!el) return;
-  if (Math.abs(resto) > 0.01) {
-    el.innerHTML = `<span style="color:${resto < 0 ? '#ef4444' : '#f59e0b'}">Diferença: R$ ${fmt(Math.abs(resto))} ${resto < 0 ? '(excedido)' : '(restante)'}</span>`;
-  } else {
-    el.innerHTML = `<span style="color:#22c55e">✓ Distribuição completa</span>`;
-  }
+  el.innerHTML = '';
 }
 
 function saveNotaDetailSplit() {
   const d = getCMVData(_notaDetailWeekKey);
   const nota = (d.notas || []).find(n => n.id === _notaDetailId);
   if (!nota) return;
-  // Atualiza itens com linha
-  if (nota.itens?.length) {
-    nota.itens.forEach((it, i) => { if (_notaDetailSplits[i]) it.linha = _notaDetailSplits[i].linha; });
-  }
-  // Agrega por linha para gerar nota.linhas
+
+  // Salva fornecedor e data
+  if (_notaDetailFornecedor.trim()) nota.fornecedor = _notaDetailFornecedor.trim();
+  if (_notaDetailData) nota.data = _notaDetailData;
+
+  // Reconstrói itens com nomes e valores editados
+  nota.itens = _notaDetailSplits.filter(r => r.nome.trim()).map(r => ({
+    nome: r.nome.trim(), valor: r.valor, linha: r.linha
+  }));
+
+  // Recalcula valor total da nota
+  const novoTotal = +_notaDetailSplits.reduce((s, r) => s + r.valor, 0).toFixed(2);
+  if (novoTotal > 0) nota.valor = novoTotal;
+
+  // Agrega por linha para nota.linhas
   const linhaMap = {};
   _notaDetailSplits.forEach(r => {
-    linhaMap[r.linha] = (linhaMap[r.linha] || 0) + r.valor;
+    if (r.linha) linhaMap[r.linha] = (linhaMap[r.linha] || 0) + r.valor;
   });
   if (Object.keys(linhaMap).length === 1) {
     nota.linha = Object.keys(linhaMap)[0];
     delete nota.linhas;
-  } else {
+  } else if (Object.keys(linhaMap).length > 1) {
     nota.linhas = Object.entries(linhaMap).map(([linha, valor]) => ({ linha, valor }));
     delete nota.linha;
   }
+
+  if (_notaDetailFornecedor.trim()) learnFornecedorLinha(_notaDetailFornecedor.trim(), nota.linha || '');
   scheduleSave();
   renderCMVPanel();
   closeNotaDetail();
-  showToast('Distribuição salva ✓');
+  showToast('Nota salva ✓');
 }
 
 function toggleNotasDrawer(btn) {
