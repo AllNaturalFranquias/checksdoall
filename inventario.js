@@ -543,7 +543,8 @@ function getWeekLabel(weekKey) {
   const mon = getWeekMonday(weekKey);
   const sun = new Date(mon.getTime() + 6 * 86400000);
   const f = d => d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
-  return `${f(mon)} – ${f(sun)}`;
+  const wNum = getISOWeekNum(mon);
+  return `Sem. ${wNum} · ${f(mon)} – ${f(sun)}`;
 }
 
 function prevWeek() {
@@ -661,6 +662,10 @@ async function init() {
   buildSections();
   updateAllBadges();
   updateWeekNav();
+  if (!IS_ADMIN) {
+    const dreBtn = document.querySelector('[data-view="dre"]');
+    if (dreBtn) dreBtn.style.display = 'none';
+  }
   await loadFromCloud();
   // Corrige semana novamente caso cloud tenha sobrescrito com formato antigo
   if (!state.semana || !/^\d{4}-W\d{2}$/.test(String(state.semana))) {
@@ -673,6 +678,7 @@ async function init() {
 // ── Views (bottom nav) ────────────────────────────────────────
 
 function switchView(view) {
+  if (view === 'dre' && !IS_ADMIN) return;
   document.querySelectorAll('.app-nav-item').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.view === view));
 
@@ -722,8 +728,8 @@ function renderDashboard() {
     : cmvYTD > pct       ? '#f59e0b' : '#22c55e';
 
   const allNotas = Object.values(state.cmv || {}).flatMap(d => d?.notas || []);
-  const lastNota = allNotas.length
-    ? allNotas[allNotas.length - 1].data || '—' : '—';
+  const parseDDMMYYYY = s => { if (!s) return 0; const [d,m,y] = s.split('/'); return new Date(+y,+m-1,+d).getTime(); };
+  const lastNota = allNotas.filter(n => n.data).sort((a,b) => parseDDMMYYYY(b.data) - parseDDMMYYYY(a.data))[0]?.data || '—';
   const lastCount = state.lastCountDate
     ? new Date(state.lastCountDate).toLocaleDateString('pt-BR') : '—';
 
@@ -913,6 +919,7 @@ function renderContagemDash() {
         ${completedPct > 0 ? `<div class="cntdash-bar-complete" style="width:${completedPct}%"></div>` : ''}
       </div>
       <div class="cntdash-chips">${chipsHtml}</div>
+      <button class="cntdash-relat-btn" onclick="openRelatorioSemanal()">📊 Relatório semana vs semana</button>
     </div>`;
 }
 
@@ -1314,7 +1321,7 @@ function switchWeek(weekKey) {
   renderContagemDash();
   updateAllBadges();
   renderCMVPanel();
-  saveState();
+  scheduleSave();
   const dash = document.getElementById('view-dashboard');
   if (dash && dash.style.display !== 'none') renderDashboard();
 }
@@ -2765,25 +2772,20 @@ function renderCMVPanel() {
         const linhasDisplay = n.linhas?.length
           ? n.linhas.map(l => `<span class="cmv-panel-nota-linha">${escHtml(l.linha)} R$ ${fmt(l.valor)}</span>`).join('')
           : n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>` : '<span class="cmv-panel-nota-linha" style="color:#f59e0b">sem linha</span>';
-        const itensHtml = n.itens?.length ? `
-          <div class="cmv-nota-itens" id="itens-${n.id}" style="display:none">
-            ${n.itens.map(it => `<div class="cmv-nota-item-row"><span class="cmv-nota-item-nome">${escHtml(it.nome)}</span><span class="cmv-nota-item-val">R$ ${fmt(it.valor)}</span></div>`).join('')}
-          </div>` : '';
-        const toggleBtn = n.itens?.length ? `<button class="cmv-nota-itens-toggle" onclick="toggleNotaItens('${n.id}',this)" title="Ver itens">▾</button>` : '';
-        return `<div class="cmv-panel-nota">
+        const itensCount = n.itens?.length ? `<span class="cmv-nota-itens-count">${n.itens.length} itens</span>` : '';
+        return `<div class="cmv-panel-nota cmv-panel-nota-clickable" onclick="openNotaDetail('${n.id}')">
           <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:4px">
-              ${toggleBtn}
+            <div style="display:flex;align-items:center;gap:6px">
               <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
+              ${itensCount}
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:4px">${linhasDisplay}</div>
-            ${itensHtml}
           </div>
-          <span class="cmv-panel-nota-data">${n.data || ''}</span>
-          <span class="cmv-panel-nota-val">R$ ${fmt(n.valor)}</span>
-          <button class="cmv-nota-split" onclick="openSplitNota('${n.id}')" title="Dividir por linha">✂</button>
-          <button class="cmv-nota-edit" onclick="openEditNota('${n.id}')" title="Editar">✏️</button>
-          <button class="cmv-nota-del" onclick="deleteNota('${n.id}')">✕</button>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
+            <span class="cmv-panel-nota-val">R$ ${fmt(n.valor)}</span>
+            <span class="cmv-panel-nota-data">${n.data || ''}</span>
+          </div>
+          <button class="cmv-nota-del" onclick="event.stopPropagation();deleteNota('${n.id}')">✕</button>
         </div>`;
       }).join('')
     : `<p class="cmv-panel-notas-vazio">Nenhuma nota inserida nesta semana</p>`;
@@ -2976,6 +2978,234 @@ function toggleNotaItens(id, btn) {
   const open = el.style.display !== 'none';
   el.style.display = open ? 'none' : 'block';
   btn.textContent = open ? '▾' : '▴';
+}
+
+// ── Relatório Semana vs Semana ────────────────────────────────
+function getConsumoSemana(weekKey) {
+  const d = state.data || {};
+  const resultado = {};
+  for (const section of SECTIONS) {
+    if (section.key === 'RESUMO' || section.key === 'CMV') continue;
+    const sData = d[section.key]?.[weekKey] || {};
+    for (const g of section.groups) {
+      for (const item of g.items) {
+        const vals = sData[item.name] || {};
+        if (vals.i !== undefined || vals.f !== undefined) {
+          const consumo = (vals.i || 0) + (vals.e || 0) - (vals.f || 0);
+          resultado[item.name] = { consumo, unit: item.unit, section: section.label };
+        }
+      }
+    }
+  }
+  return resultado;
+}
+
+function openRelatorioSemanal() {
+  const currKey = state.semana;
+  const mon = getWeekMonday(currKey);
+  const prevMon = new Date(mon.getTime() - 7 * 86400000);
+  const prevKey = getWeekKey(prevMon);
+
+  const curr = getConsumoSemana(currKey);
+  const prev = getConsumoSemana(prevKey);
+  const allItems = new Set([...Object.keys(curr), ...Object.keys(prev)]);
+
+  const semZeroConsumo = [], maioresAltas = [], maioresBaixas = [];
+  const comparacao = [];
+
+  for (const nome of allItems) {
+    const cAtual = curr[nome]?.consumo ?? 0;
+    const cAnt   = prev[nome]?.consumo ?? 0;
+    const unit   = curr[nome]?.unit || prev[nome]?.unit || '';
+    const section = curr[nome]?.section || prev[nome]?.section || '';
+
+    if (cAtual === 0 && cAnt > 0) semZeroConsumo.push({ nome, unit, cAtual, cAnt, section });
+    const delta = cAnt > 0 ? ((cAtual - cAnt) / cAnt * 100) : (cAtual > 0 ? 100 : 0);
+    if (Math.abs(delta) > 0.5 || cAtual !== 0 || cAnt !== 0)
+      comparacao.push({ nome, unit, cAtual, cAnt, delta, section });
+  }
+
+  comparacao.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  maioresAltas.push(...comparacao.filter(r => r.delta > 20 && r.cAnt > 0).slice(0, 10));
+  maioresBaixas.push(...comparacao.filter(r => r.delta < -20 && r.cAnt > 0).slice(0, 10));
+
+  const totalAtual = Object.values(curr).reduce((s, v) => s + (v.consumo || 0), 0);
+  const totalAnt   = Object.values(prev).reduce((s, v) => s + (v.consumo || 0), 0);
+
+  const fmtConsumo = (v, u) => `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
+  const rowHtml = (r) => `
+    <div class="relat-item-row">
+      <div>
+        <div class="relat-item-nome">${escHtml(r.nome)}</div>
+        <div class="relat-item-vals">${fmtConsumo(r.cAnt, r.unit)} → ${fmtConsumo(r.cAtual, r.unit)}</div>
+      </div>
+      <div class="relat-item-change ${r.delta > 0 ? 'up' : r.delta < 0 ? 'down' : 'zero'}">
+        ${r.delta > 0 ? '+' : ''}${r.delta.toFixed(0)}%
+      </div>
+    </div>`;
+
+  const el = document.getElementById('relatorioContent');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="relat-summary-card">
+      <div class="relat-summary-row">
+        <span class="relat-summary-label">${getWeekLabel(prevKey)} (anterior)</span>
+      </div>
+      <div class="relat-summary-row">
+        <span class="relat-summary-label">${getWeekLabel(currKey)} (atual)</span>
+      </div>
+      <div class="relat-summary-row" style="margin-top:8px;border-top:1px solid rgba(255,255,255,.15);padding-top:8px">
+        <span class="relat-summary-label">Total itens com consumo (atual)</span>
+        <span class="relat-summary-val">${Object.keys(curr).length}</span>
+      </div>
+    </div>
+
+    ${semZeroConsumo.length ? `
+    <div class="relat-section">
+      <div class="relat-section-title">⚠ Itens sem consumo nesta semana (tinha consumo na anterior)</div>
+      ${semZeroConsumo.map(r => `
+        <div class="relat-item-row">
+          <div>
+            <div class="relat-item-nome">${escHtml(r.nome)}</div>
+            <div class="relat-item-vals" style="color:#9ca3af">Semana ant.: ${fmtConsumo(r.cAnt, r.unit)}</div>
+          </div>
+          <span class="relat-item-change zero">0</span>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${maioresAltas.length ? `
+    <div class="relat-section">
+      <div class="relat-section-title">📈 Maior aumento de consumo</div>
+      ${maioresAltas.map(rowHtml).join('')}
+    </div>` : ''}
+
+    ${maioresBaixas.length ? `
+    <div class="relat-section">
+      <div class="relat-section-title">📉 Maior redução de consumo</div>
+      ${maioresBaixas.map(rowHtml).join('')}
+    </div>` : ''}
+
+    ${!semZeroConsumo.length && !maioresAltas.length && !maioresBaixas.length
+      ? '<p style="text-align:center;color:#9ca3af;padding:40px 0">Sem dados suficientes para comparar semanas.</p>' : ''}
+  `;
+
+  document.getElementById('invRelatorioOverlay').style.display = 'flex';
+}
+
+function emailRelatorio() {
+  const el = document.getElementById('relatorioContent');
+  if (!el) return;
+  const texto = el.innerText || el.textContent || '';
+  const assunto = encodeURIComponent(`Relatório Semanal — ${UNIT_NAME} — ${getWeekLabel(state.semana)}`);
+  const corpo = encodeURIComponent(texto.replace(/\n\n+/g, '\n').trim());
+  window.location.href = `mailto:?subject=${assunto}&body=${corpo}`;
+}
+
+// ── Detalhe de Nota (overlay full-screen) ─────────────────────
+let _notaDetailWeekKey = null;
+let _notaDetailId      = null;
+let _notaDetailSplits  = [];
+
+function openNotaDetail(notaId) {
+  const d = getCMVData(state.semana);
+  const nota = (d.notas || []).find(n => n.id === notaId);
+  if (!nota) return;
+  _notaDetailWeekKey = state.semana;
+  _notaDetailId = notaId;
+  _notaDetailSplits = JSON.parse(JSON.stringify(
+    nota.itens?.length
+      ? nota.itens.map(it => ({ nome: it.nome, valor: it.valor || 0, linha: it.linha || nota.linha || (linhasConfig.linhas[0] || 'Outros') }))
+      : (nota.linhas?.length ? nota.linhas.map(l => ({ nome: l.linha, valor: l.valor, linha: l.linha }))
+        : [{ nome: nota.fornecedor || 'Total', valor: nota.valor || 0, linha: nota.linha || (linhasConfig.linhas[0] || 'Outros') }])
+  ));
+  renderNotaDetail();
+  document.getElementById('invNotaDetailOverlay').style.display = 'flex';
+}
+
+function closeNotaDetail() {
+  document.getElementById('invNotaDetailOverlay').style.display = 'none';
+}
+
+function renderNotaDetail() {
+  const d = getCMVData(_notaDetailWeekKey);
+  const nota = (d.notas || []).find(n => n.id === _notaDetailId);
+  if (!nota) return;
+  const linhaOpts = (linhasConfig.linhas || []).map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
+  const hasItens = nota.itens?.length > 0;
+
+  const rows = _notaDetailSplits.map((row, i) => `
+    <div class="ndet-item-row">
+      <div class="ndet-item-nome">${escHtml(row.nome)}</div>
+      <select class="ndet-item-linha" onchange="_notaDetailSplits[${i}].linha=this.value;notaDetailUpdateResto()">
+        ${(linhasConfig.linhas || []).map(l => `<option value="${escHtml(l)}"${row.linha===l?' selected':''}>${escHtml(l)}</option>`).join('')}
+      </select>
+      <input class="ndet-item-val" type="number" step="0.01" min="0"
+        value="${row.valor.toFixed(2)}"
+        oninput="_notaDetailSplits[${i}].valor=parseFloat(this.value)||0;notaDetailUpdateResto()">
+    </div>`).join('');
+
+  const el = document.getElementById('notaDetailContent');
+  el.innerHTML = `
+    <div class="ndet-header-info">
+      <div class="ndet-fornecedor">${escHtml(nota.fornecedor || '—')}</div>
+      <div class="ndet-meta">
+        <span>${nota.data || '—'}</span>
+        <span class="ndet-total">R$ ${fmt(nota.valor)}</span>
+      </div>
+    </div>
+    <div class="ndet-linhas-header">
+      <span>${hasItens ? 'Itens da nota — atribua cada item a uma linha de CMV' : 'Linhas de CMV'}</span>
+    </div>
+    <div class="ndet-items-list">${rows}</div>
+    <div class="ndet-resto" id="notaDetailResto"></div>
+    ${hasItens ? '<p class="ndet-hint">Altere a linha de cada item e salve para distribuir o CMV.</p>' : ''}
+    <div class="ndet-actions">
+      <button class="ndet-save-btn" onclick="saveNotaDetailSplit()">✓ Salvar distribuição</button>
+      <button class="ndet-edit-btn" onclick="closeNotaDetail();openEditNota('${nota.id}')">✏️ Editar nota</button>
+    </div>`;
+  notaDetailUpdateResto();
+}
+
+function notaDetailUpdateResto() {
+  const d = getCMVData(_notaDetailWeekKey);
+  const nota = (d.notas || []).find(n => n.id === _notaDetailId);
+  if (!nota) return;
+  const total = _notaDetailSplits.reduce((s, r) => s + r.valor, 0);
+  const resto = +(nota.valor - total).toFixed(2);
+  const el = document.getElementById('notaDetailResto');
+  if (!el) return;
+  if (Math.abs(resto) > 0.01) {
+    el.innerHTML = `<span style="color:${resto < 0 ? '#ef4444' : '#f59e0b'}">Diferença: R$ ${fmt(Math.abs(resto))} ${resto < 0 ? '(excedido)' : '(restante)'}</span>`;
+  } else {
+    el.innerHTML = `<span style="color:#22c55e">✓ Distribuição completa</span>`;
+  }
+}
+
+function saveNotaDetailSplit() {
+  const d = getCMVData(_notaDetailWeekKey);
+  const nota = (d.notas || []).find(n => n.id === _notaDetailId);
+  if (!nota) return;
+  // Atualiza itens com linha
+  if (nota.itens?.length) {
+    nota.itens.forEach((it, i) => { if (_notaDetailSplits[i]) it.linha = _notaDetailSplits[i].linha; });
+  }
+  // Agrega por linha para gerar nota.linhas
+  const linhaMap = {};
+  _notaDetailSplits.forEach(r => {
+    linhaMap[r.linha] = (linhaMap[r.linha] || 0) + r.valor;
+  });
+  if (Object.keys(linhaMap).length === 1) {
+    nota.linha = Object.keys(linhaMap)[0];
+    delete nota.linhas;
+  } else {
+    nota.linhas = Object.entries(linhaMap).map(([linha, valor]) => ({ linha, valor }));
+    delete nota.linha;
+  }
+  scheduleSave();
+  renderCMVPanel();
+  closeNotaDetail();
+  showToast('Distribuição salva ✓');
 }
 
 function toggleNotasDrawer(btn) {
