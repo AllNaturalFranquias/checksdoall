@@ -2686,62 +2686,77 @@ body { padding-bottom: 62px; }
 }
 
 /* Cabeçalho da nota no detail */
-.ndet-header-info {
+/* Header editável da nota */
+.ndet-edit-header {
   background: #fff; border-radius: 12px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  display: flex; flex-direction: column; gap: 8px;
 }
-.ndet-fornecedor { font-size: 17px; font-weight: 700; color: var(--text); }
-.ndet-meta { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font-size: 13px; }
-.ndet-total { font-weight: 700; color: var(--text); }
+.ndet-edit-row { display: flex; align-items: center; gap: 8px; }
+.ndet-edit-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; min-width: 72px; }
+.ndet-edit-inp {
+  flex: 1; border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 14px; font-family: inherit;
+  background: #fafafa; color: var(--text); outline: none;
+}
+.ndet-edit-inp:focus { border-color: var(--primary); }
 
 /* Lista de itens */
 .ndet-linhas-header {
   font-size: 11px; font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: .5px;
   padding: 0 4px;
+  display: flex; justify-content: space-between; align-items: center;
 }
+.ndet-total-label { font-size: 13px; font-weight: 700; color: var(--text); text-transform: none; letter-spacing: 0; }
 .ndet-items-list { display: flex; flex-direction: column; gap: 8px; }
 .ndet-item-row {
   background: #fff; border-radius: 10px;
-  padding: 10px 12px;
-  display: grid; grid-template-columns: 1fr auto auto;
-  align-items: center; gap: 8px;
+  padding: 10px 10px;
+  display: grid; grid-template-columns: 1fr auto auto auto;
+  align-items: center; gap: 6px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
-.ndet-item-nome {
+.ndet-item-nome-inp {
   font-size: 13px; font-weight: 600; color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border: 1.5px solid var(--border); border-radius: 7px;
+  padding: 5px 8px; background: #fafafa; font-family: inherit;
+  min-width: 0; outline: none;
 }
+.ndet-item-nome-inp:focus { border-color: var(--primary); }
 .ndet-item-linha {
   font-size: 12px; border: 1.5px solid var(--border);
-  border-radius: 7px; padding: 5px 8px;
-  background: #f9fafb; color: var(--text);
-  max-width: 130px;
+  border-radius: 7px; padding: 5px 6px;
+  background: #fafafa; color: var(--text);
+  max-width: 120px; outline: none; font-family: inherit;
 }
+.ndet-item-linha:focus { border-color: var(--primary); }
 .ndet-item-val {
   font-size: 13px; font-weight: 700;
   border: 1.5px solid var(--border); border-radius: 7px;
-  padding: 5px 8px; width: 86px; text-align: right;
-  background: #f9fafb;
+  padding: 5px 6px; width: 80px; text-align: right;
+  background: #fafafa; outline: none; font-family: inherit;
 }
-.ndet-item-val:focus { border-color: #22c55e; outline: none; }
-.ndet-resto {
-  font-size: 13px; font-weight: 600;
-  padding: 10px 14px; border-radius: 10px;
-  background: #f0fdf4; text-align: center;
+.ndet-item-val:focus { border-color: var(--primary); outline: none; }
+.ndet-item-del {
+  background: none; border: none; color: #ccc;
+  font-size: 14px; cursor: pointer; padding: 4px; flex-shrink: 0;
 }
-.ndet-hint { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.ndet-item-del:active { color: #ef4444; }
+.ndet-add-item-btn {
+  width: 100%; background: none; border: 1.5px dashed var(--border);
+  border-radius: 10px; padding: 10px; font-size: 13px;
+  font-weight: 600; color: var(--primary); cursor: pointer;
+  font-family: inherit; transition: background 0.15s;
+}
+.ndet-add-item-btn:active { background: #fdf7f0; }
+.ndet-resto { font-size: 13px; }
 .ndet-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 .ndet-save-btn {
-  background: #1A7F3C; color: #fff; border: none;
+  background: var(--primary); color: #fff; border: none;
   border-radius: 10px; padding: 14px; font-size: 15px;
   font-weight: 700; cursor: pointer; font-family: inherit;
-}
-.ndet-edit-btn {
-  background: #f3f4f6; color: var(--text); border: none;
-  border-radius: 10px; padding: 12px; font-size: 14px;
-  font-weight: 600; cursor: pointer; font-family: inherit;
 }
 
 /* Nota card clicável */
