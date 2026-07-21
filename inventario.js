@@ -2576,7 +2576,13 @@ async function confirmNFItems() {
   if (!d.notas) d.notas = [];
   const linha = document.getElementById('nfRevLinha')?.value || 'Outros';
   learnFornecedorLinha(fornecedor, linha);
-  const itensResumo = included.map(i => ({ nome: i.nome || i.descricao || '', valor: i.preco_total || 0 })).filter(i => i.nome);
+  const itensResumo = included.map(i => ({
+    nome: i.nome || i.descricao || '',
+    quantidade: i.quantidade || 1,
+    unidade: i.unidade || 'UN',
+    preco_unitario: i.preco_unitario || 0,
+    valor: i.preco_total || 0
+  })).filter(i => i.nome);
   d.notas.push({ id: Date.now().toString(36), fornecedor, linha, valor: total, data: dataFmt, itens: itensResumo.length ? itensResumo : undefined });
 
   // Atualizar cotações com preços lidos
@@ -3117,11 +3123,16 @@ function openNotaDetail(notaId) {
   _notaDetailId         = notaId;
   _notaDetailFornecedor = nota.fornecedor || '';
   _notaDetailData       = nota.data || '';
+  const defLinha = nota.linha || (linhasConfig.linhas[0] || 'Outros');
   _notaDetailSplits = JSON.parse(JSON.stringify(
     nota.itens?.length
-      ? nota.itens.map(it => ({ nome: it.nome, valor: it.valor || 0, linha: it.linha || nota.linha || (linhasConfig.linhas[0] || 'Outros') }))
-      : (nota.linhas?.length ? nota.linhas.map(l => ({ nome: l.linha, valor: l.valor, linha: l.linha }))
-        : [{ nome: nota.fornecedor || 'Total', valor: nota.valor || 0, linha: nota.linha || (linhasConfig.linhas[0] || 'Outros') }])
+      ? nota.itens.map(it => ({
+          nome: it.nome, valor: it.valor || 0, linha: it.linha || defLinha,
+          quantidade: it.quantidade || 1, unidade: it.unidade || 'UN', preco_unitario: it.preco_unitario || 0
+        }))
+      : (nota.linhas?.length
+          ? nota.linhas.map(l => ({ nome: l.linha, valor: l.valor, linha: l.linha, quantidade: 1, unidade: 'UN', preco_unitario: 0 }))
+          : [{ nome: nota.fornecedor || 'Total', valor: nota.valor || 0, linha: defLinha, quantidade: 1, unidade: 'UN', preco_unitario: 0 }])
   ));
   renderNotaDetail();
   document.getElementById('invNotaDetailOverlay').style.display = 'flex';
@@ -3144,18 +3155,67 @@ function renderNotaDetail() {
     return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : '';
   })();
 
-  const rows = _notaDetailSplits.map((row, i) => `
-    <div class="ndet-item-row">
-      <input class="ndet-item-nome-inp" type="text" value="${escHtml(row.nome)}" placeholder="Item"
-        oninput="_notaDetailSplits[${i}].nome=this.value">
-      <select class="ndet-item-linha" onchange="_notaDetailSplits[${i}].linha=this.value;notaDetailUpdateResto()">
-        ${(linhasConfig.linhas || []).map(l => `<option value="${escHtml(l)}"${row.linha===l?' selected':''}>${escHtml(l)}</option>`).join('')}
-      </select>
-      <input class="ndet-item-val" type="number" step="0.01" min="0"
-        value="${row.valor.toFixed(2)}"
-        oninput="_notaDetailSplits[${i}].valor=parseFloat(this.value)||0;notaDetailUpdateResto()">
-      <button class="ndet-item-del" onclick="_notaDetailSplits.splice(${i},1);renderNotaDetail()" title="Remover">✕</button>
-    </div>`).join('');
+  // Detecta variações absurdas de preço unitário vs semana anterior
+  const prevKey = (() => { const m = getWeekMonday(_notaDetailWeekKey); const p = new Date(m.getTime()-7*86400000); return getWeekKey(p); })();
+  const alertas = {};
+  _notaDetailSplits.forEach((row, i) => {
+    if (!row.preco_unitario || row.preco_unitario <= 0) return;
+    // Busca preço anterior em cotacoes
+    for (const sec of SECTIONS) {
+      for (const g of sec.groups) {
+        const item = g.items.find(it => it.name.toLowerCase() === row.nome.toLowerCase());
+        if (!item) continue;
+        const prevQ = getQuinzena(prevKey);
+        const prevP = ((state.cotacoes?.[prevQ]?.[sec.key] || {})[item.name])
+                   || ((state.precoSem?.[prevKey]?.[sec.key] || {})[item.name]);
+        if (prevP && prevP > 0) {
+          const delta = Math.abs(row.preco_unitario - prevP) / prevP * 100;
+          if (delta > 40) alertas[i] = { prevP, delta: delta.toFixed(0) };
+        }
+      }
+    }
+  });
+
+  const rows = _notaDetailSplits.map((row, i) => {
+    const alerta = alertas[i];
+    const puCalc = row.quantidade > 0 ? (row.valor / row.quantidade) : row.preco_unitario;
+    return `
+    <div class="ndet-item-card${alerta ? ' ndet-item-alerta' : ''}">
+      <div class="ndet-item-top">
+        <input class="ndet-item-nome-inp" type="text" value="${escHtml(row.nome)}" placeholder="Item"
+          oninput="_notaDetailSplits[${i}].nome=this.value">
+        <button class="ndet-item-del" onclick="_notaDetailSplits.splice(${i},1);renderNotaDetail()" title="Remover">✕</button>
+      </div>
+      <div class="ndet-item-nums">
+        <div class="ndet-num-group">
+          <label class="ndet-num-lbl">Qtd</label>
+          <input class="ndet-num-inp" type="number" step="0.001" min="0" value="${row.quantidade}"
+            oninput="_notaDetailSplits[${i}].quantidade=parseFloat(this.value)||0;_notaDetailSplits[${i}].preco_unitario=_notaDetailSplits[${i}].quantidade>0?(+(_notaDetailSplits[${i}].valor/_notaDetailSplits[${i}].quantidade).toFixed(4)):0;renderNotaDetail()">
+        </div>
+        <div class="ndet-num-group">
+          <label class="ndet-num-lbl">Un.</label>
+          <input class="ndet-num-inp ndet-un-inp" type="text" value="${escHtml(row.unidade||'UN')}"
+            oninput="_notaDetailSplits[${i}].unidade=this.value">
+        </div>
+        <div class="ndet-num-group">
+          <label class="ndet-num-lbl">R$/un</label>
+          <input class="ndet-num-inp" type="number" step="0.0001" min="0" value="${puCalc.toFixed(4)}"
+            oninput="_notaDetailSplits[${i}].preco_unitario=parseFloat(this.value)||0;_notaDetailSplits[${i}].valor=+(_notaDetailSplits[${i}].quantidade*parseFloat(this.value)||0).toFixed(2);notaDetailUpdateResto()">
+        </div>
+        <div class="ndet-num-group">
+          <label class="ndet-num-lbl">Total R$</label>
+          <input class="ndet-num-inp ndet-val-inp" type="number" step="0.01" min="0" value="${row.valor.toFixed(2)}"
+            oninput="_notaDetailSplits[${i}].valor=parseFloat(this.value)||0;_notaDetailSplits[${i}].preco_unitario=_notaDetailSplits[${i}].quantidade>0?(+(_notaDetailSplits[${i}].valor/_notaDetailSplits[${i}].quantidade).toFixed(4)):0;notaDetailUpdateResto()">
+        </div>
+      </div>
+      <div class="ndet-item-linha-row">
+        <select class="ndet-item-linha" onchange="_notaDetailSplits[${i}].linha=this.value">
+          ${(linhasConfig.linhas || []).map(l => `<option value="${escHtml(l)}"${row.linha===l?' selected':''}>${escHtml(l)}</option>`).join('')}
+        </select>
+      </div>
+      ${alerta ? `<div class="ndet-alerta-msg">⚠ Preço variou ${alerta.delta}% vs semana anterior (era R$ ${alerta.prevP.toFixed(2)}/un) — confira se está correto</div>` : ''}
+    </div>`;
+  }).join('');
 
   const el = document.getElementById('notaDetailContent');
   el.innerHTML = `
@@ -3210,9 +3270,11 @@ function saveNotaDetailSplit() {
   if (_notaDetailFornecedor.trim()) nota.fornecedor = _notaDetailFornecedor.trim();
   if (_notaDetailData) nota.data = _notaDetailData;
 
-  // Reconstrói itens com nomes e valores editados
+  // Reconstrói itens com todos os campos editados
   nota.itens = _notaDetailSplits.filter(r => r.nome.trim()).map(r => ({
-    nome: r.nome.trim(), valor: r.valor, linha: r.linha
+    nome: r.nome.trim(), valor: r.valor, linha: r.linha,
+    quantidade: r.quantidade || 1, unidade: r.unidade || 'UN',
+    preco_unitario: r.preco_unitario || (r.quantidade > 0 ? +(r.valor / r.quantidade).toFixed(4) : 0)
   }));
 
   // Recalcula valor total da nota
