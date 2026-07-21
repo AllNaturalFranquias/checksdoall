@@ -3189,8 +3189,8 @@ function renderNotaDetail() {
       <div class="ndet-item-nums">
         <div class="ndet-num-group">
           <label class="ndet-num-lbl">Qtd</label>
-          <input class="ndet-num-inp" type="number" step="0.001" min="0" value="${row.quantidade}"
-            oninput="_notaDetailSplits[${i}].quantidade=parseFloat(this.value)||0;_notaDetailSplits[${i}].preco_unitario=_notaDetailSplits[${i}].quantidade>0?(+(_notaDetailSplits[${i}].valor/_notaDetailSplits[${i}].quantidade).toFixed(4)):0;renderNotaDetail()">
+          <input id="ndet-qty-${i}" class="ndet-num-inp" type="number" step="0.001" min="0" value="${row.quantidade}"
+            oninput="ndetUpdateQty(${i},this.value)">
         </div>
         <div class="ndet-num-group">
           <label class="ndet-num-lbl">Un.</label>
@@ -3199,13 +3199,13 @@ function renderNotaDetail() {
         </div>
         <div class="ndet-num-group">
           <label class="ndet-num-lbl">R$/un</label>
-          <input class="ndet-num-inp" type="number" step="0.0001" min="0" value="${puCalc.toFixed(4)}"
-            oninput="_notaDetailSplits[${i}].preco_unitario=parseFloat(this.value)||0;_notaDetailSplits[${i}].valor=+(_notaDetailSplits[${i}].quantidade*parseFloat(this.value)||0).toFixed(2);notaDetailUpdateResto()">
+          <input id="ndet-pu-${i}" class="ndet-num-inp" type="number" step="0.0001" min="0" value="${puCalc.toFixed(4)}"
+            oninput="ndetUpdatePU(${i},this.value)">
         </div>
         <div class="ndet-num-group">
           <label class="ndet-num-lbl">Total R$</label>
-          <input class="ndet-num-inp ndet-val-inp" type="number" step="0.01" min="0" value="${row.valor.toFixed(2)}"
-            oninput="_notaDetailSplits[${i}].valor=parseFloat(this.value)||0;_notaDetailSplits[${i}].preco_unitario=_notaDetailSplits[${i}].quantidade>0?(+(_notaDetailSplits[${i}].valor/_notaDetailSplits[${i}].quantidade).toFixed(4)):0;notaDetailUpdateResto()">
+          <input id="ndet-val-${i}" class="ndet-num-inp ndet-val-inp" type="number" step="0.01" min="0" value="${row.valor.toFixed(2)}"
+            oninput="ndetUpdateVal(${i},this.value)">
         </div>
       </div>
       <div class="ndet-item-linha-row">
@@ -3241,6 +3241,41 @@ function renderNotaDetail() {
     <div class="ndet-actions">
       <button class="ndet-save-btn" onclick="saveNotaDetailSplit()">✓ Salvar alterações</button>
     </div>`;
+  notaDetailUpdateResto();
+}
+
+function ndetUpdateQty(i, val) {
+  const qty = parseFloat(val) || 0;
+  _notaDetailSplits[i].quantidade = qty;
+  if (qty > 0) {
+    const pu = +(_notaDetailSplits[i].valor / qty).toFixed(4);
+    _notaDetailSplits[i].preco_unitario = pu;
+    const puEl = document.getElementById('ndet-pu-' + i);
+    if (puEl && document.activeElement !== puEl) puEl.value = pu.toFixed(4);
+  }
+  notaDetailUpdateResto();
+}
+
+function ndetUpdatePU(i, val) {
+  const pu = parseFloat(val) || 0;
+  _notaDetailSplits[i].preco_unitario = pu;
+  const total = +(_notaDetailSplits[i].quantidade * pu).toFixed(2);
+  _notaDetailSplits[i].valor = total;
+  const valEl = document.getElementById('ndet-val-' + i);
+  if (valEl && document.activeElement !== valEl) valEl.value = total.toFixed(2);
+  notaDetailUpdateResto();
+}
+
+function ndetUpdateVal(i, val) {
+  const total = parseFloat(val) || 0;
+  _notaDetailSplits[i].valor = total;
+  const qty = _notaDetailSplits[i].quantidade;
+  if (qty > 0) {
+    const pu = +(total / qty).toFixed(4);
+    _notaDetailSplits[i].preco_unitario = pu;
+    const puEl = document.getElementById('ndet-pu-' + i);
+    if (puEl && document.activeElement !== puEl) puEl.value = pu.toFixed(4);
+  }
   notaDetailUpdateResto();
 }
 
