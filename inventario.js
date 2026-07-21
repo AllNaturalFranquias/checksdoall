@@ -2715,7 +2715,7 @@ function buildNotasByLinhaHtml(notas) {
         <div class="cmv-lg-row-right">
           <span class="cmv-lg-val">R$ ${fmt(valor)}</span>
           ${reassign}
-          <button class="cmv-lg-icon" onclick="openEditNota('${n.id}')">✏️</button>
+          <button class="cmv-lg-icon" onclick="openNotaDetail('${n.id}')">✏️</button>
         </div>
       </div>`;
     }).join('');
@@ -3587,14 +3587,14 @@ function renderLinhasNotas() {
       ? (n.linhas.find(e => (e.linha || 'Outros') === linhasActiveLinha)?.valor || 0)
       : n.valor;
     const splitTag = isSplit ? `<span class="linhas-split-tag">dividida · ${n.linhas.length} linhas</span>` : '';
-    return `<div class="linhas-nota-card" onclick="openEditNota('${n.id}')">
+    return `<div class="linhas-nota-card" onclick="openNotaDetail('${n.id}')">
       <div class="linhas-nota-top">
         <span class="linhas-nota-forn">${escHtml(n.fornecedor || '—')}</span>
         <span class="linhas-nota-val">R$ ${fmt(valorLinha)}</span>
       </div>
       <div class="linhas-nota-foot">
         <span>${n.data || '—'} ${splitTag}</span>
-        <span class="linhas-nota-edit-hint">Toque para editar →</span>
+        <span class="linhas-nota-edit-hint">✏️ Toque para editar</span>
       </div>
     </div>`;
   }).join('');
