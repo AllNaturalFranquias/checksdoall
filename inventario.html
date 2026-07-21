@@ -8,7 +8,7 @@
   <title>Controles Estoque</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="inventario.css?v=12">
+  <link rel="stylesheet" href="inventario.css?v=13">
 </head>
 <body>
 
@@ -437,7 +437,27 @@
     </div>
   </div>
 
+  <!-- Overlay: Detalhe de Nota Fiscal (itens + split por linha) -->
+  <div class="nota-detail-overlay" id="invNotaDetailOverlay" style="display:none">
+    <div class="nota-detail-header">
+      <button class="nota-detail-back" onclick="closeNotaDetail()">← Voltar</button>
+      <span class="nota-detail-title">Itens da Nota</span>
+      <span></span>
+    </div>
+    <div class="nota-detail-body" id="notaDetailContent"></div>
+  </div>
+
+  <!-- Overlay: Relatório Semana vs Semana -->
+  <div class="nota-detail-overlay" id="invRelatorioOverlay" style="display:none">
+    <div class="nota-detail-header">
+      <button class="nota-detail-back" onclick="document.getElementById('invRelatorioOverlay').style.display='none'">← Fechar</button>
+      <span class="nota-detail-title">Relatório Semanal</span>
+      <button class="nota-detail-back" onclick="emailRelatorio()" style="font-size:14px">📧</button>
+    </div>
+    <div class="nota-detail-body" id="relatorioContent"></div>
+  </div>
+
   <script src="fichas_const.js?v=1"></script>
-  <script src="inventario.js?v=12"></script>
+  <script src="inventario.js?v=13"></script>
 </body>
 </html>
