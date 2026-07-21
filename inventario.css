@@ -2710,40 +2710,53 @@ body { padding-bottom: 62px; }
   display: flex; justify-content: space-between; align-items: center;
 }
 .ndet-total-label { font-size: 13px; font-weight: 700; color: var(--text); text-transform: none; letter-spacing: 0; }
-.ndet-items-list { display: flex; flex-direction: column; gap: 8px; }
-.ndet-item-row {
-  background: #fff; border-radius: 10px;
-  padding: 10px 10px;
-  display: grid; grid-template-columns: 1fr auto auto auto;
-  align-items: center; gap: 6px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+.ndet-items-list { display: flex; flex-direction: column; gap: 10px; }
+.ndet-item-card {
+  background: #fff; border-radius: 12px;
+  padding: 12px 12px 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  display: flex; flex-direction: column; gap: 8px;
 }
+.ndet-item-card.ndet-item-alerta { border-left: 3px solid #f59e0b; }
+.ndet-item-top { display: flex; align-items: center; gap: 6px; }
 .ndet-item-nome-inp {
-  font-size: 13px; font-weight: 600; color: var(--text);
-  border: 1.5px solid var(--border); border-radius: 7px;
-  padding: 5px 8px; background: #fafafa; font-family: inherit;
+  flex: 1; font-size: 14px; font-weight: 600; color: var(--text);
+  border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; background: #fafafa; font-family: inherit;
   min-width: 0; outline: none;
 }
 .ndet-item-nome-inp:focus { border-color: var(--primary); }
-.ndet-item-linha {
-  font-size: 12px; border: 1.5px solid var(--border);
-  border-radius: 7px; padding: 5px 6px;
-  background: #fafafa; color: var(--text);
-  max-width: 120px; outline: none; font-family: inherit;
-}
-.ndet-item-linha:focus { border-color: var(--primary); }
-.ndet-item-val {
-  font-size: 13px; font-weight: 700;
-  border: 1.5px solid var(--border); border-radius: 7px;
-  padding: 5px 6px; width: 80px; text-align: right;
-  background: #fafafa; outline: none; font-family: inherit;
-}
-.ndet-item-val:focus { border-color: var(--primary); outline: none; }
 .ndet-item-del {
   background: none; border: none; color: #ccc;
-  font-size: 14px; cursor: pointer; padding: 4px; flex-shrink: 0;
+  font-size: 16px; cursor: pointer; padding: 4px 6px; flex-shrink: 0;
 }
 .ndet-item-del:active { color: #ef4444; }
+.ndet-item-nums {
+  display: grid; grid-template-columns: 1fr 60px 1fr 1fr; gap: 6px;
+}
+.ndet-num-group { display: flex; flex-direction: column; gap: 3px; }
+.ndet-num-lbl { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.ndet-num-inp {
+  border: 1.5px solid var(--border); border-radius: 7px;
+  padding: 5px 6px; font-size: 13px; font-weight: 600;
+  background: #fafafa; font-family: inherit; text-align: right;
+  outline: none; width: 100%;
+}
+.ndet-un-inp { text-align: center; }
+.ndet-val-inp { font-weight: 700; }
+.ndet-num-inp:focus { border-color: var(--primary); }
+.ndet-item-linha-row { display: flex; }
+.ndet-item-linha {
+  flex: 1; font-size: 12px; border: 1.5px solid var(--border);
+  border-radius: 7px; padding: 5px 8px;
+  background: #fafafa; color: var(--text);
+  outline: none; font-family: inherit;
+}
+.ndet-item-linha:focus { border-color: var(--primary); }
+.ndet-alerta-msg {
+  font-size: 11px; font-weight: 600; color: #92400e;
+  background: #fffbeb; border-radius: 6px; padding: 6px 8px;
+}
 .ndet-add-item-btn {
   width: 100%; background: none; border: 1.5px dashed var(--border);
   border-radius: 10px; padding: 10px; font-size: 13px;
