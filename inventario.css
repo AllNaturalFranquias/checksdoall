@@ -2658,3 +2658,144 @@ body { padding-bottom: 62px; }
 .dre-val-group { font-size: 13px; font-weight: 500; color: #374151; text-align: right; }
 .dre-row-sub2 { background: #fff; padding-left: 28px !important; }
 .dre-label-sub2 { color: #6b7280; font-size: 12px; }
+
+/* ── Nota Detail Overlay ─────────────────────────────────────── */
+.nota-detail-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.nota-detail-header {
+  background: var(--dark); color: #fff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  flex-shrink: 0;
+}
+.nota-detail-back {
+  background: rgba(255,255,255,.12); border: none; color: #fff;
+  font-size: 13px; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+}
+.nota-detail-title { font-size: 15px; font-weight: 700; }
+.nota-detail-body {
+  flex: 1; overflow-y: auto;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* Cabeçalho da nota no detail */
+.ndet-header-info {
+  background: #fff; border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.ndet-fornecedor { font-size: 17px; font-weight: 700; color: var(--text); }
+.ndet-meta { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font-size: 13px; }
+.ndet-total { font-weight: 700; color: var(--text); }
+
+/* Lista de itens */
+.ndet-linhas-header {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  padding: 0 4px;
+}
+.ndet-items-list { display: flex; flex-direction: column; gap: 8px; }
+.ndet-item-row {
+  background: #fff; border-radius: 10px;
+  padding: 10px 12px;
+  display: grid; grid-template-columns: 1fr auto auto;
+  align-items: center; gap: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.ndet-item-nome {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ndet-item-linha {
+  font-size: 12px; border: 1.5px solid var(--border);
+  border-radius: 7px; padding: 5px 8px;
+  background: #f9fafb; color: var(--text);
+  max-width: 130px;
+}
+.ndet-item-val {
+  font-size: 13px; font-weight: 700;
+  border: 1.5px solid var(--border); border-radius: 7px;
+  padding: 5px 8px; width: 86px; text-align: right;
+  background: #f9fafb;
+}
+.ndet-item-val:focus { border-color: #22c55e; outline: none; }
+.ndet-resto {
+  font-size: 13px; font-weight: 600;
+  padding: 10px 14px; border-radius: 10px;
+  background: #f0fdf4; text-align: center;
+}
+.ndet-hint { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.ndet-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.ndet-save-btn {
+  background: #1A7F3C; color: #fff; border: none;
+  border-radius: 10px; padding: 14px; font-size: 15px;
+  font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.ndet-edit-btn {
+  background: #f3f4f6; color: var(--text); border: none;
+  border-radius: 10px; padding: 12px; font-size: 14px;
+  font-weight: 600; cursor: pointer; font-family: inherit;
+}
+
+/* Nota card clicável */
+.cmv-panel-nota-clickable { cursor: pointer; }
+.cmv-panel-nota-clickable:active { background: #f3f4f6; }
+.cmv-nota-itens-count {
+  font-size: 10px; font-weight: 700; color: #fff;
+  background: #3b82f6; border-radius: 20px;
+  padding: 1px 7px;
+}
+
+/* ── Relatório Semanal ───────────────────────────────────────── */
+.relat-section { margin-bottom: 16px; }
+.relat-section-title {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 8px;
+}
+.relat-item-row {
+  background: #fff; border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 6px;
+  display: flex; justify-content: space-between; align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.relat-item-nome { font-size: 13px; font-weight: 600; color: var(--text); }
+.relat-item-vals { font-size: 12px; color: var(--muted); text-align: right; }
+.relat-item-change { font-size: 13px; font-weight: 700; }
+.relat-item-change.up   { color: #ef4444; }
+.relat-item-change.down { color: #22c55e; }
+.relat-item-change.zero { color: #9ca3af; }
+.relat-summary-card {
+  background: var(--dark); color: #fff;
+  border-radius: 12px; padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.relat-summary-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.relat-summary-label { font-size: 12px; color: rgba(255,255,255,.6); }
+.relat-summary-val { font-size: 14px; font-weight: 700; }
+.relat-btn-email {
+  background: #3b82f6; color: #fff; border: none;
+  border-radius: 10px; padding: 12px; font-size: 14px;
+  font-weight: 700; cursor: pointer; font-family: inherit;
+  width: 100%; margin-top: 8px;
+}
+
+/* Botão de relatório no contagem dash */
+.cntdash-relat-btn {
+  background: #f0fdf4; border: 1.5px solid #bbf7d0;
+  color: #15803d; border-radius: 8px; padding: 8px 14px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: inherit; margin-top: 8px; width: 100%;
+}
+
+/* Melhorias visuais do bottom nav */
+.app-bottom-nav { max-width: 480px; left: 50%; transform: translateX(-50%); }
+@media (min-width: 480px) {
+  main.inv-sections { max-width: 480px; margin: 0 auto; }
+  .inv-header { max-width: 480px; left: 50%; transform: translateX(-50%); }
+}
