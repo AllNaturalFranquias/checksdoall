@@ -2997,9 +2997,11 @@ function getConsumoSemana(weekKey) {
       for (const item of g.items) {
         const vals = sData[item.name] || {};
         if (vals.i !== undefined || vals.f !== undefined) {
-          const consumo = (vals.i || 0) + (vals.e || 0) - (vals.f || 0);
-          const saldo = vals.f !== undefined ? vals.f : null;
-          resultado[item.name] = { consumo, saldo, unit: item.unit, section: section.label };
+          const ini    = vals.i || 0;
+          const ent    = vals.e || 0;
+          const fin    = vals.f !== undefined ? vals.f : null;
+          const consumo = ini + ent - (fin ?? 0);
+          resultado[item.name] = { consumo, ini, ent, fin, unit: item.unit, section: section.label };
         }
       }
     }
@@ -3023,34 +3025,53 @@ function openRelatorioSemanal() {
   for (const nome of allItems) {
     const cAtual  = curr[nome]?.consumo ?? 0;
     const cAnt    = prev[nome]?.consumo ?? 0;
-    const saldo   = curr[nome]?.saldo ?? null;   // estoque final desta semana
     const unit    = curr[nome]?.unit || prev[nome]?.unit || '';
     const section = curr[nome]?.section || prev[nome]?.section || '';
+    const ini  = curr[nome]?.ini ?? null;
+    const ent  = curr[nome]?.ent ?? null;
+    const fin  = curr[nome]?.fin ?? null;
 
-    if (cAtual === 0 && cAnt > 0) semZeroConsumo.push({ nome, unit, cAtual, cAnt, saldo, section });
+    if (cAtual === 0 && cAnt > 0) semZeroConsumo.push({ nome, unit, cAtual, cAnt, ini, ent, fin, section });
     const delta = cAnt > 0 ? ((cAtual - cAnt) / cAnt * 100) : (cAtual > 0 ? 100 : 0);
     if (Math.abs(delta) > 0.5 || cAtual !== 0 || cAnt !== 0)
-      comparacao.push({ nome, unit, cAtual, cAnt, delta, saldo, section });
+      comparacao.push({ nome, unit, cAtual, cAnt, delta, ini, ent, fin, section });
   }
 
   comparacao.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   maioresAltas.push(...comparacao.filter(r => r.delta > 20 && r.cAnt > 0).slice(0, 10));
   maioresBaixas.push(...comparacao.filter(r => r.delta < -20 && r.cAnt > 0).slice(0, 10));
 
-  const fmtC = (v, u) => `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
-  const saldoTag = (r) => r.saldo !== null
-    ? `<span class="relat-saldo ${r.saldo > 0 ? 'relat-saldo-ok' : 'relat-saldo-zero'}">saldo: ${fmtC(r.saldo, r.unit)}</span>`
-    : '';
+  const fmtC = (v, u) => v === null || v === undefined ? '—' : `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
+  const fmtN = (v, u) => v === null || v === undefined ? '—' : `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
+
+  const formulaHtml = (r) => {
+    if (r.ini === null && r.ent === null && r.fin === null) return '';
+    const hasData = r.ini !== null || r.ent !== null || r.fin !== null;
+    if (!hasData) return '';
+    return `<div class="relat-formula">
+      <span class="relat-formula-part">${fmtN(r.ini, r.unit)} inicial</span>
+      <span class="relat-formula-op">+</span>
+      <span class="relat-formula-part">${fmtN(r.ent, r.unit)} entradas</span>
+      <span class="relat-formula-op">−</span>
+      <span class="relat-formula-part">${fmtN(r.fin, r.unit)} final</span>
+      <span class="relat-formula-op">=</span>
+      <span class="relat-formula-result">${fmtC(r.cAtual, r.unit)}</span>
+    </div>`;
+  };
 
   const rowHtml = (r) => `
-    <div class="relat-item-row">
-      <div class="relat-item-left">
+    <div class="relat-item-card">
+      <div class="relat-item-top">
         <div class="relat-item-nome">${escHtml(r.nome)}</div>
-        <div class="relat-item-vals">${fmtC(r.cAnt, r.unit)} → ${fmtC(r.cAtual, r.unit)} ${saldoTag(r)}</div>
+        <div class="relat-item-change ${r.delta > 0 ? 'up' : r.delta < 0 ? 'down' : 'zero'}">
+          ${r.delta > 0 ? '+' : ''}${r.delta.toFixed(0)}%
+        </div>
       </div>
-      <div class="relat-item-change ${r.delta > 0 ? 'up' : r.delta < 0 ? 'down' : 'zero'}">
-        ${r.delta > 0 ? '+' : ''}${r.delta.toFixed(0)}%
+      <div class="relat-item-semanas">
+        <span>Sem. ant.: ${fmtC(r.cAnt, r.unit)}</span>
+        <span>Esta sem.: ${fmtC(r.cAtual, r.unit)}</span>
       </div>
+      ${formulaHtml(r)}
     </div>`;
 
   const el = document.getElementById('relatorioContent');
@@ -3070,19 +3091,21 @@ function openRelatorioSemanal() {
     <div class="relat-section">
       <div class="relat-section-title">⚠ Sem consumo esta semana (tinha na anterior)</div>
       ${semZeroConsumo.map(r => `
-        <div class="relat-item-row">
-          <div class="relat-item-left">
+        <div class="relat-item-card">
+          <div class="relat-item-top">
             <div class="relat-item-nome">${escHtml(r.nome)}</div>
-            <div class="relat-item-vals">
-              Ant.: ${fmtC(r.cAnt, r.unit)}
-              ${r.saldo !== null
-                ? `· ${r.saldo > 0
-                    ? `<span class="relat-saldo relat-saldo-ok">saldo: ${fmtC(r.saldo, r.unit)} — ainda tinha estoque</span>`
-                    : `<span class="relat-saldo relat-saldo-zero">saldo: 0 — sem estoque</span>`}`
-                : ''}
-            </div>
+            <span class="relat-item-change zero">0</span>
           </div>
-          <span class="relat-item-change zero">0</span>
+          <div class="relat-item-semanas">
+            <span>Sem. ant.: ${fmtC(r.cAnt, r.unit)}</span>
+            <span>Esta sem.: 0 ${r.unit}</span>
+          </div>
+          ${formulaHtml(r)}
+          ${r.fin !== null
+            ? (r.fin > 0
+                ? `<div class="relat-obs relat-obs-info">ℹ️ Ainda havia ${fmtN(r.fin, r.unit)} em estoque — pode não ter sido necessário repor</div>`
+                : `<div class="relat-obs relat-obs-warn">⚠️ Estoque zerou — verifique se houve consumo não registrado</div>`)
+            : ''}
         </div>`).join('')}
     </div>` : ''}
 
