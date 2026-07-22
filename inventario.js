@@ -729,7 +729,15 @@ function renderDashboard() {
 
   const allNotas = Object.values(state.cmv || {}).flatMap(d => d?.notas || []);
   const parseDDMMYYYY = s => { if (!s) return 0; const [d,m,y] = s.split('/'); return new Date(+y,+m-1,+d).getTime(); };
-  const lastNota = allNotas.filter(n => n.data).sort((a,b) => parseDDMMYYYY(b.data) - parseDDMMYYYY(a.data))[0]?.data || '—';
+  const notasSorted = allNotas.filter(n => n.ts || n.data).sort((a,b) => {
+    const ta = a.ts || parseDDMMYYYY(a.data);
+    const tb = b.ts || parseDDMMYYYY(b.data);
+    return tb - ta;
+  });
+  const lastNotaObj = notasSorted[0];
+  const lastNota = lastNotaObj
+    ? (lastNotaObj.ts ? new Date(lastNotaObj.ts).toLocaleDateString('pt-BR') : lastNotaObj.data)
+    : '—';
   const lastCount = state.lastCountDate
     ? new Date(state.lastCountDate).toLocaleDateString('pt-BR') : '—';
 
@@ -1710,7 +1718,8 @@ function saveNota() {
   d.notas.push({
     id: Date.now().toString(36),
     fornecedor, linha, valor,
-    data: data ? new Date(data).toLocaleDateString('pt-BR') : ''
+    data: data ? new Date(data).toLocaleDateString('pt-BR') : '',
+    ts: Date.now()
   });
   closeAddNota();
   doSave();
@@ -2586,7 +2595,7 @@ async function confirmNFItems() {
     preco_unitario: i.preco_unitario || 0,
     valor: i.preco_total || 0
   })).filter(i => i.nome);
-  d.notas.push({ id: Date.now().toString(36), fornecedor, linha, valor: total, data: dataFmt, itens: itensResumo.length ? itensResumo : undefined });
+  d.notas.push({ id: Date.now().toString(36), fornecedor, linha, valor: total, data: dataFmt, ts: Date.now(), itens: itensResumo.length ? itensResumo : undefined });
 
   // Atualizar cotações com preços lidos
   const q = getQuinzena(state.semana);
