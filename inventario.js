@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 // ── Configuração Supabase ─────────────────────────────────────
 // Cole aqui as credenciais do seu projeto Supabase
@@ -1557,7 +1557,10 @@ function renderCMV() {
     <div class="cmv-config-card" id="cmvConfigCard">
       <div class="cmv-config-header">
         <span class="cmv-config-title">Configuração (${semRef})</span>
-        <button class="cmv-config-pin-btn" id="cmvConfigBtn" onclick="openCMVConfig()">🔒 Configurar</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="abrirVendas()" style="background:#f0faf5;border:1.5px solid #52b788;color:#2d6a4f;border-radius:7px;padding:5px 10px;font-size:.75rem;font-weight:700;cursor:pointer">📂 Importar xlsx</button>
+          <button class="cmv-config-pin-btn" id="cmvConfigBtn" onclick="openCMVConfig()">🔒 Configurar</button>
+        </div>
       </div>
       <div class="cmv-config-fields" id="cmvConfigFields" style="display:none">
         <div class="cmv-config-row">
