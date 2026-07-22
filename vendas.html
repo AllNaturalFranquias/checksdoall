@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Importar Vendas · Controles ALL</title>
+<style>
+  :root {
+    --primary: #2d6a4f;
+    --primary-light: #52b788;
+    --bg: #f0f2f5;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --text: #1b1b1b;
+    --muted: #6b7280;
+    --radius: 10px;
+    --success: #40916c;
+    --danger: #e74c3c;
+    --delivery: #2196f3;
+    --balcao: #e67e22;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  header { background: var(--primary); color: #fff; padding: 14px 16px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  .h-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .h-logo { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; }
+  .h-logo span.dot { opacity: .5; margin: 0 6px; }
+  .h-badge { background: rgba(255,255,255,.18); border-radius: 6px; padding: 2px 9px; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .h-right { display: flex; align-items: center; gap: 10px; }
+  .h-user { font-size: .82rem; opacity: .85; }
+  .btn-logout { background: rgba(255,255,255,.15); border: none; color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: .8rem; transition: background .15s; }
+  .btn-logout:hover { background: rgba(255,255,255,.28); }
+
+  /* Main */
+  main { max-width: 860px; margin: 0 auto; padding: 20px 14px 40px; }
+
+  .back-link { display: inline-flex; align-items: center; gap: 5px; color: var(--primary); font-size: .85rem; font-weight: 600; text-decoration: none; margin-bottom: 20px; opacity: .85; }
+  .back-link:hover { opacity: 1; text-decoration: underline; }
+
+  .page-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+  .page-sub { font-size: .85rem; color: var(--muted); margin-bottom: 20px; }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 2.5px dashed var(--primary-light);
+    border-radius: 14px;
+    background: #fff;
+    padding: 52px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    user-select: none;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--primary); background: #f0faf5; }
+  .drop-icon { font-size: 3rem; margin-bottom: 14px; }
+  .drop-title { font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 6px; }
+  .drop-sub { font-size: .85rem; color: var(--muted); }
+  .drop-sub b { color: var(--text); }
+  #fileInput { display: none; }
+
+  /* Info banner */
+  .info-banner {
+    background: #f0faf5;
+    border: 1.5px solid var(--primary-light);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: .88rem;
+  }
+  .loja-chip { background: var(--primary); color: #fff; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: .78rem; text-transform: uppercase; white-space: nowrap; }
+  .info-sep { color: var(--muted); }
+  .info-periodo { color: var(--text); font-weight: 600; }
+  .info-linhas { color: var(--muted); font-size: .8rem; margin-left: auto; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,.07); margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: .88rem; }
+  thead tr { background: var(--primary); color: #fff; }
+  th { padding: 11px 14px; text-align: left; font-weight: 600; font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; }
+  th.r, td.r { text-align: right; }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: #fafbfc; }
+  tfoot td { padding: 11px 14px; font-weight: 700; background: #f0faf5; border-top: 2px solid var(--primary-light); }
+
+  .wk-label { font-weight: 700; font-size: .9rem; }
+  .wk-period { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+  .val-delivery { color: var(--delivery); font-weight: 600; }
+  .val-balcao { color: var(--balcao); font-weight: 600; }
+  .val-total { color: var(--primary); font-weight: 700; font-size: .95rem; }
+  .val-pct { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+
+  /* Legenda */
+  .legenda { display: flex; gap: 16px; margin: 12px 0 0; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--muted); }
+  .leg-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* Actions */
+  .actions { margin-top: 22px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 12px 26px;
+    border-radius: 8px;
+    font-size: .95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary:hover { opacity: .88; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-secondary {
+    background: #fff;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+    padding: 11px 18px;
+    border-radius: 8px;
+    font-size: .88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .btn-secondary:hover { background: #f0faf5; }
+  .action-note { font-size: .8rem; color: var(--muted); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 13px 24px;
+    border-radius: 10px;
+    font-size: .9rem;
+    font-weight: 600;
+    z-index: 999;
+    display: none;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+  }
+  .toast.success { background: var(--success); color: #fff; }
+  .toast.error   { background: var(--danger); color: #fff; }
+  .toast.info    { background: #1b1b1b; color: #fff; }
+  @keyframes toastIn { from { opacity:0; transform: translateX(-50%) translateY(10px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-row">
+    <div class="h-logo">CONTROLES <span class="dot">●</span> <span class="h-badge" id="unitBadge">—</span></div>
+    <div class="h-right">
+      <span class="h-user" id="userName"></span>
+      <button class="btn-logout" onclick="logout()">↩ Sair</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <a href="#" class="back-link" id="backLink">← Voltar ao Inventário</a>
+
+  <div class="page-title">📊 Importar Relatório de Vendas</div>
+  <div class="page-sub">Carregue o arquivo .xlsx exportado do AllFood para distribuir o faturamento por semana automaticamente.</div>
+
+  <!-- Upload -->
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div class="drop-icon">📂</div>
+    <div class="drop-title">Arraste o arquivo aqui</div>
+    <div class="drop-sub">ou clique para selecionar — <b>Relatório de Histórico de Vendas (.xlsx)</b></div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+
+  <!-- Preview -->
+  <div id="preview" class="hidden">
+
+    <div class="info-banner">
+      <span class="info-sep" style="color:var(--muted);font-size:.8rem">Loja:</span>
+      <select id="lojaSelect" onchange="onLojaChange()" style="background:var(--primary);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-weight:700;font-size:.78rem;text-transform:uppercase;cursor:pointer;letter-spacing:.04em">
+        <option value="batel">BATEL</option>
+        <option value="maringa">MARINGÁ</option>
+        <option value="parkshopping">PARK SHOPPING</option>
+        <option value="bigorrilho">BIGORRILHO</option>
+        <option value="cascavel">CASCAVEL</option>
+      </select>
+      <span class="info-sep">·</span>
+      <span class="info-periodo" id="infoPeriodo">—</span>
+      <span class="info-linhas" id="infoLinhas"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Semana</th>
+            <th class="r">🛵 Delivery</th>
+            <th class="r">🏪 Balcão</th>
+            <th class="r">Total (R$)</th>
+          </tr>
+        </thead>
+        <tbody id="weekBody"></tbody>
+        <tfoot id="weekFoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="legenda">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--delivery)"></div> Delivery</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--balcao)"></div> Balcão</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="btnSalvar" onclick="salvar()">
+        <span>💾</span> Salvar faturamento no app
+      </button>
+      <button class="btn-secondary" onclick="resetar()">Cancelar</button>
+      <span class="action-note" id="actionNote"></span>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- SheetJS para leitura de xlsx client-side -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://nhuotdwfzowydrjeyttc.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5odW90ZHdmem93eWRyamV5dHRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTM2NDAsImV4cCI6MjA5NTk4OTY0MH0.JovSWvkJ5OdX1tauz7sYOuyDIm1Mbcx5gJF8Zb20oe4';
+
+// ── Auth ──────────────────────────────────────────────
+const UNIT_ID = new URLSearchParams(location.search).get('u') || 'batel';
+let _session = null;
+try { _session = JSON.parse(sessionStorage.getItem('inv_session') || 'null'); } catch(e) {}
+if (!_session) { location.href = 'index.html'; }
+
+document.getElementById('unitBadge').textContent = UNIT_ID;
+document.getElementById('userName').textContent = _session?.nome || '';
+document.getElementById('backLink').href = `inventario.html?u=${UNIT_ID}`;
+
+function logout() {
+  sessionStorage.removeItem('inv_session');
+  location.href = 'index.html';
+}
+
+// ── State ─────────────────────────────────────────────
+let parsedWeeks = {};
+let detectedLoja = null;
+
+// ── Loja detection ────────────────────────────────────
+const LOJA_MAP = [
+  ['BIGORRILHO', 'bigorrilho'],
+  ['PARK SHOPPING', 'parkshopping'],
+  ['PARKSHOPPING', 'parkshopping'],
+  ['BATEL', 'batel'],
+  ['MARINGÁ', 'maringa'],
+  ['MARINGA', 'maringa'],
+  ['CASCAVEL', 'cascavel'],
+];
+function detectLoja(nome) {
+  const n = (nome || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  for (const [key, id] of LOJA_MAP) {
+    const k = key.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (n.includes(k)) return id;
+  }
+  return null;
+}
+
+// ── ISO Week ──────────────────────────────────────────
+function getWeekKey(date) {
+  const d = new Date(date);
+  d.setHours(12, 0, 0, 0);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() + 4 - day);
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+function getWeekMeta(weekKey) {
+  const [y, w] = weekKey.split('-W');
+  const weekNum = parseInt(w);
+  const jan4 = new Date(parseInt(y), 0, 4);
+  const dayOfJan4 = jan4.getDay() || 7;
+  const mon = new Date(jan4);
+  mon.setDate(jan4.getDate() - dayOfJan4 + 1 + (weekNum - 1) * 7);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+  return { num: weekNum, label: `Sem. ${weekNum}`, period: `${fmt(mon)} – ${fmt(sun)}` };
+}
+
+// ── Formatting ────────────────────────────────────────
+function fmtR(n) {
+  return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+// ── File upload handlers ──────────────────────────────
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  if (!file) return;
+  if (!file.name.match(/\.(xlsx|xls)$/i)) {
+    showToast('Selecione um arquivo .xlsx do AllFood', 'error');
+    return;
+  }
+  showToast('Lendo arquivo...', 'info');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true });
+      processRows(rows);
+    } catch(err) {
+      showToast('Erro ao ler o arquivo: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Process xlsx rows ─────────────────────────────────
+function processRows(rows) {
+  // Cabeçalho do relatório: row[2][1] = nome da empresa
+  const empresa = rows[2] && rows[2][1] ? String(rows[2][1]) : '';
+  detectedLoja = detectLoja(empresa) || UNIT_ID;
+
+  const weeks = {};
+  let dataLines = 0;
+  let minDate = null, maxDate = null;
+
+  // Dados começam na linha 10 (índice 9); linha 9 (índice 8) é o cabeçalho
+  for (let i = 9; i < rows.length; i++) {
+    const row = rows[i];
+    // Pula linhas sem data (summary rows no final, ou linhas vazias)
+    if (!row || !(row[1] instanceof Date) || row[9] == null) continue;
+
+    const d = row[1];
+    const vliq = typeof row[9] === 'number' ? row[9] : parseFloat(row[9]);
+    if (isNaN(vliq) || vliq === 0) continue;
+
+    // TIPO: 'delivery' (case-insensitive) ou balcao
+    const tipo = String(row[3] || '').toLowerCase().includes('delivery') ? 'delivery' : 'balcao';
+    const wk = getWeekKey(d);
+
+    if (!weeks[wk]) weeks[wk] = { delivery: 0, balcao: 0, total: 0 };
+    weeks[wk][tipo]  += vliq;
+    weeks[wk].total  += vliq;
+    dataLines++;
+
+    if (!minDate || d < minDate) minDate = d;
+    if (!maxDate || d > maxDate) maxDate = d;
+  }
+
+  if (dataLines === 0) {
+    showToast('Nenhuma linha de venda encontrada. Verifique o arquivo.', 'error');
+    return;
+  }
+
+  parsedWeeks = weeks;
+  renderPreview(empresa, dataLines, minDate, maxDate, weeks);
+}
+
+// ── Render preview table ──────────────────────────────
+function renderPreview(empresa, dataLines, minDate, maxDate, weeks) {
+  const sel = document.getElementById('lojaSelect');
+  sel.value = detectedLoja || UNIT_ID;
+  document.getElementById('infoPeriodo').textContent = `${fmtDate(minDate)} até ${fmtDate(maxDate)}`;
+  document.getElementById('infoLinhas').textContent = `${dataLines.toLocaleString('pt-BR')} itens vendidos`;
+
+  const sortedKeys = Object.keys(weeks).sort();
+  let totDel = 0, totBal = 0, totGeral = 0;
+  const tbody = document.getElementById('weekBody');
+  tbody.innerHTML = '';
+
+  sortedKeys.forEach(wk => {
+    const d = weeks[wk];
+    const { label, period } = getWeekMeta(wk);
+    const pctDel = d.total > 0 ? (d.delivery / d.total * 100).toFixed(0) : 0;
+    const pctBal = d.total > 0 ? (d.balcao  / d.total * 100).toFixed(0) : 0;
+    totDel   += d.delivery;
+    totBal   += d.balcao;
+    totGeral += d.total;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div class="wk-label">${label}</div>
+        <div class="wk-period">${period}</div>
+      </td>
+      <td class="r">
+        <div class="val-delivery">${fmtR(d.delivery)}</div>
+        <div class="val-pct">${pctDel}%</div>
+      </td>
+      <td class="r">
+        <div class="val-balcao">${fmtR(d.balcao)}</div>
+        <div class="val-pct">${pctBal}%</div>
+      </td>
+      <td class="r val-total">${fmtR(d.total)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const totPctDel = totGeral > 0 ? (totDel / totGeral * 100).toFixed(0) : 0;
+  const totPctBal = totGeral > 0 ? (totBal / totGeral * 100).toFixed(0) : 0;
+  document.getElementById('weekFoot').innerHTML = `
+    <tr>
+      <td>TOTAL PERÍODO</td>
+      <td class="r">
+        <div class="val-delivery">${fmtR(totDel)}</div>
+        <div class="val-pct">${totPctDel}%</div>
+      </td>
+      <td class="r">
+        <div class="val-balcao">${fmtR(totBal)}</div>
+        <div class="val-pct">${totPctBal}%</div>
+      </td>
+      <td class="r val-total">${fmtR(totGeral)}</td>
+    </tr>
+  `;
+
+  updateActionNote(sortedKeys.length);
+
+  dz.classList.add('hidden');
+  document.getElementById('preview').classList.remove('hidden');
+}
+
+function updateActionNote(numWeeks) {
+  const loja = document.getElementById('lojaSelect').value;
+  const n = numWeeks !== undefined ? numWeeks : Object.keys(parsedWeeks).length;
+  document.getElementById('actionNote').textContent =
+    `Será salvo em: dados_${loja} (${n} semana${n !== 1 ? 's' : ''})`;
+}
+
+function onLojaChange() {
+  updateActionNote();
+}
+
+function resetar() {
+  dz.classList.remove('hidden');
+  document.getElementById('preview').classList.add('hidden');
+  document.getElementById('fileInput').value = '';
+  parsedWeeks = {};
+  detectedLoja = null;
+}
+
+// ── Supabase ──────────────────────────────────────────
+async function sbGet(loja) {
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.dados_${loja}&select=estado`,
+    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+  );
+  if (!r.ok) throw new Error(`Supabase GET ${r.status}`);
+  const data = await r.json();
+  return data[0]?.estado || {};
+}
+
+async function sbPatch(loja, estado) {
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.dados_${loja}`,
+    {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({ estado, atualizado_em: new Date().toISOString() })
+    }
+  );
+  if (!r.ok) throw new Error(`Supabase PATCH ${r.status}`);
+}
+
+// ── Save ──────────────────────────────────────────────
+async function salvar() {
+  const loja = document.getElementById('lojaSelect').value || UNIT_ID;
+  const btn = document.getElementById('btnSalvar');
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳</span> Salvando...';
+
+  try {
+    const estado = await sbGet(loja);
+    if (!estado.cmv) estado.cmv = {};
+
+    Object.entries(parsedWeeks).forEach(([wk, d]) => {
+      if (!estado.cmv[wk]) estado.cmv[wk] = {};
+      // faturamento total usado pelo resumo.html e relatorio.mjs
+      estado.cmv[wk].faturamento    = Math.round(d.total    * 100) / 100;
+      // breakdown por canal (disponível para uso futuro)
+      estado.cmv[wk].fat_delivery   = Math.round(d.delivery * 100) / 100;
+      estado.cmv[wk].fat_balcao     = Math.round(d.balcao   * 100) / 100;
+    });
+
+    await sbPatch(loja, estado);
+    showToast('✓ Faturamento salvo com sucesso!', 'success');
+    btn.innerHTML = '<span>✓</span> Salvo!';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<span>💾</span> Salvar faturamento no app';
+    }, 3000);
+  } catch(err) {
+    showToast('Erro ao salvar: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<span>💾</span> Salvar faturamento no app';
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  t.style.display = 'block';
+  t.style.animation = 'toastIn .3s ease';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.display = 'none'; }, 3800);
+}
+</script>
+
+</body>
+</html>
