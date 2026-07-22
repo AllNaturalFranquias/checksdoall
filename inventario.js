@@ -3010,9 +3010,12 @@ function getConsumoSemana(weekKey) {
 }
 
 function openRelatorioSemanal() {
-  const currKey = state.semana;
-  const mon = getWeekMonday(currKey);
-  const prevMon = new Date(mon.getTime() - 7 * 86400000);
+  // Sempre mostra a semana fechada (semana passada) vs a anterior
+  const hoje = new Date();
+  const currMon = getWeekMonday(getWeekKey(hoje));
+  const fechadaMon = new Date(currMon.getTime() - 7 * 86400000);
+  const currKey = getWeekKey(fechadaMon);
+  const prevMon = new Date(fechadaMon.getTime() - 7 * 86400000);
   const prevKey = getWeekKey(prevMon);
 
   const curr = getConsumoSemana(currKey);
