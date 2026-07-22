@@ -46,8 +46,15 @@
     <div class="inv-modal">
       <h2>Configurar CMV</h2>
       <p id="cmvConfigSemRef" style="font-weight:600;color:#444;margin-bottom:16px">—</p>
+      <div style="margin-bottom:14px">
+        <a id="importVendasLink" href="#"
+           style="display:inline-flex;align-items:center;gap:6px;background:#f5f5f5;border:1.5px solid #ddd;border-radius:8px;padding:8px 14px;font-size:.82rem;font-weight:600;color:#2d6a4f;text-decoration:none"
+           onclick="abrirVendas();return false">
+          📂 Importar faturamento do arquivo xlsx
+        </a>
+      </div>
       <div class="nota-field">
-        <label>Faturamento</label>
+        <label>Faturamento (ou preencha manualmente)</label>
         <div class="cmv-input-wrap">
           <span class="cmv-prefix">R$</span>
           <input type="number" inputmode="decimal" id="cmvFaturamento" placeholder="0,00" oninput="onCMVConfigChange()">
@@ -114,6 +121,13 @@
       <button class="inv-modal-cancel" onclick="closePin()">Cancelar</button>
     </div>
   </div>
+
+  <script>
+  function abrirVendas() {
+    const u = new URLSearchParams(location.search).get('u') || 'batel';
+    window.location.href = 'vendas.html?u=' + u;
+  }
+  </script>
 
   <!-- Input oculto para câmera/foto de NF -->
   <input type="file" accept="image/*" capture="environment" id="nfCamera"
