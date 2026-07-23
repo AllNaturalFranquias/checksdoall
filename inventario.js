@@ -2346,7 +2346,9 @@ function checkNFDate(val, ocrFailed) {
 
 function showNFReview(geminiData) {
   document.getElementById('nfReviewLoading').style.display = 'none';
-  document.getElementById('nfReviewContent').style.display = 'block';
+  document.getElementById('nfReviewContent').style.display = 'flex';
+  const srch = document.getElementById('nfItemSearch');
+  if (srch) srch.value = '';
 
   const fornEl = document.getElementById('nfRevFornecedor');
   const dataEl = document.getElementById('nfRevData');
@@ -2372,42 +2374,80 @@ function showNFReview(geminiData) {
   renderNFItems();
 }
 
+// Cache dos itens do inventário para o combo da NF
+let _nfComboItemsCache = null;
+function _getNFComboItems() {
+  if (_nfComboItemsCache) return _nfComboItemsCache;
+  const items = [];
+  for (const section of SECTIONS) {
+    if (section.key === 'CMV' || section.key === 'RESUMO') continue;
+    for (const g of section.groups)
+      for (const item of g.items)
+        items.push({ val: `${section.key}::${item.name}`, label: `[${section.label}] ${item.name}` });
+  }
+  items.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  _nfComboItemsCache = items;
+  return items;
+}
+
+function nfComboOpen(id) {
+  const inp = document.querySelector(`#nfcombo_${id} .nf-combo-inp`);
+  nfComboFilter(id, inp ? inp.value : '');
+}
+
+function nfComboFilter(id, q) {
+  const drop = document.getElementById('nfdrop_' + id);
+  if (!drop) return;
+  const all = _getNFComboItems();
+  const filtered = q.trim() ? all.filter(i => i.label.toLowerCase().includes(q.toLowerCase())) : all;
+  drop.innerHTML =
+    `<div class="nf-combo-opt" onmousedown="nfComboSelect(${id},'','')">— Não usar —</div>` +
+    filtered.slice(0, 80).map(i =>
+      `<div class="nf-combo-opt" onmousedown="nfComboSelect(${id},'${escHtml(i.val)}','${escHtml(i.label)}')">${escHtml(i.label)}</div>`
+    ).join('');
+  drop.style.display = 'block';
+}
+
+function nfComboSelect(id, val, label) {
+  const inp = document.querySelector(`#nfcombo_${id} .nf-combo-inp`);
+  if (inp) inp.value = label;
+  const drop = document.getElementById('nfdrop_' + id);
+  if (drop) drop.style.display = 'none';
+  changeNFMatch(id, val);
+  // Atualiza badge sem re-renderizar tudo
+  const badge = document.querySelector(`#nfitem_${id} .nf-match-badge`);
+  if (badge) {
+    badge.textContent = val ? label : 'Não identificado — vincule acima';
+    badge.className   = 'nf-match-badge ' + (val ? 'nf-match-auto' : 'nf-match-none');
+  }
+  const cadBtn = document.getElementById(`nfcad_${id}`);
+  if (cadBtn) cadBtn.style.display = val ? 'none' : 'flex';
+}
+
+function nfComboBlur(id) {
+  setTimeout(() => {
+    const drop = document.getElementById('nfdrop_' + id);
+    if (drop) drop.style.display = 'none';
+  }, 200);
+}
+
 function renderNFItems() {
   const list = document.getElementById('nfItemsList');
   if (!list) return;
 
   const q = (document.getElementById('nfItemSearch')?.value || '').toLowerCase().trim();
 
-  const allItems = [];
-  for (const section of SECTIONS) {
-    if (section.key === 'CMV' || section.key === 'RESUMO') continue;
-    for (const g of section.groups)
-      for (const item of g.items)
-        allItems.push({ sectionKey: section.key, itemName: item.name, label: `[${section.label}] ${item.name}` });
-  }
-  allItems.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-
   const visible = q
     ? nfExtractedItems.filter(i => i.descricao.toLowerCase().includes(q))
     : nfExtractedItems;
 
   list.innerHTML = visible.map(item => {
-    const matchVal  = item.match ? `${item.match.sectionKey}::${item.match.itemName}` : '';
-    const matchBadge = item.match
-      ? (item.match.score === 1.0 ? 'nf-match-saved' : 'nf-match-auto')
-      : 'nf-match-none';
+    const matchVal   = item.match ? `${item.match.sectionKey}::${item.match.itemName}` : '';
+    const matchBadge = item.match ? (item.match.score === 1.0 ? 'nf-match-saved' : 'nf-match-auto') : 'nf-match-none';
     const matchLabel = item.match
       ? `[${item.match.sectionKey}] ${item.match.itemName}`
-      : 'Não identificado — selecione abaixo';
-
-    const opts = `<option value=""${!matchVal ? ' selected' : ''}>— Não usar —</option>` +
-      allItems.map(i => {
-        const v   = `${i.sectionKey}::${i.itemName}`;
-        const sel = v === matchVal ? ' selected' : '';
-        return `<option value="${escHtml(v)}"${sel}>${escHtml(i.label)}</option>`;
-      }).join('');
-
-    const showCadastrar = !matchVal;
+      : 'Não identificado — vincule acima';
+    const comboLabel = item.match ? `[${item.match.sectionKey}] ${item.match.itemName}` : '';
 
     return `<div class="nf-item${item.incluir ? '' : ' nf-item-off'}" id="nfitem_${item.id}">
       <input class="nf-item-chk" type="checkbox" ${item.incluir ? 'checked' : ''} onchange="toggleNFItem(${item.id},this.checked)">
@@ -2428,9 +2468,16 @@ function renderNFItems() {
             onchange="updateNFItemVal(${item.id},'preco_total',this.value)">
         </div>
         <span class="nf-match-badge ${matchBadge}">${matchLabel}</span>
-        <select class="nf-item-select" onchange="changeNFMatch(${item.id},this.value)">${opts}</select>
+        <div class="nf-combo-wrap" id="nfcombo_${item.id}">
+          <input class="nf-combo-inp" type="text" value="${escHtml(comboLabel)}"
+            placeholder="Buscar no inventário..." autocomplete="off"
+            onfocus="nfComboOpen(${item.id})"
+            oninput="nfComboFilter(${item.id},this.value)"
+            onblur="nfComboBlur(${item.id})">
+          <div class="nf-combo-drop" id="nfdrop_${item.id}"></div>
+        </div>
         <button class="nf-cadastrar-btn" id="nfcad_${item.id}"
-          style="display:${showCadastrar ? 'flex' : 'none'}"
+          style="display:${matchVal ? 'none' : 'flex'}"
           data-nf-id="${item.id}" data-nf-desc="${escHtml(item.descricao)}"
           onclick="openAddItemFromNF(parseInt(this.dataset.nfId), this.dataset.nfDesc)">
           📝 Cadastrar este insumo
