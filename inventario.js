@@ -3100,17 +3100,19 @@ function openRelatorioSemanal() {
 
   const fmtC = (v, u) => v === null || v === undefined ? '—' : `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
   const fmtN = (v, u) => v === null || v === undefined ? '—' : `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
+  const fmtD = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const weekSun  = new Date(fechadaMon.getTime() + 6 * 86400000);
 
   const formulaHtml = (r) => {
     if (r.ini === null && r.ent === null && r.fin === null) return '';
     const hasData = r.ini !== null || r.ent !== null || r.fin !== null;
     if (!hasData) return '';
     return `<div class="relat-formula">
-      <span class="relat-formula-part">${fmtN(r.ini, r.unit)} inicial</span>
+      <span class="relat-formula-part">${fmtN(r.ini, r.unit)}<br><small class="relat-formula-date">Contagem ${fmtD(fechadaMon)}</small></span>
       <span class="relat-formula-op">+</span>
-      <span class="relat-formula-part">${fmtN(r.ent, r.unit)} entradas</span>
+      <span class="relat-formula-part">${fmtN(r.ent, r.unit)}<br><small class="relat-formula-date">Entradas ${fmtD(fechadaMon)}–${fmtD(weekSun)}</small></span>
       <span class="relat-formula-op">−</span>
-      <span class="relat-formula-part">${fmtN(r.fin, r.unit)} final</span>
+      <span class="relat-formula-part">${fmtN(r.fin, r.unit)}<br><small class="relat-formula-date">Contagem ${fmtD(currMon)}</small></span>
       <span class="relat-formula-op">=</span>
       <span class="relat-formula-result">${fmtC(r.cAtual, r.unit)}</span>
     </div>`;
@@ -4118,6 +4120,7 @@ function renderComparativo() {
       return { key: k, label: getWeekLabel(k), fat, gasto, cmvPct, meta };
     })
     .filter(w => w.fat > 0 || w.gasto > 0)
+    .filter(w => w.key !== getWeekKey())
     .slice(-10);
 
   // 2. Preços monitorados – cotacoes (q1/q2) + precoSem (semanal)
