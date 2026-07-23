@@ -2111,6 +2111,10 @@ function openCameraForNF() {
   document.getElementById('nfCamera').click();
 }
 
+function openGaleriaForNF() {
+  document.getElementById('nfGaleria').click();
+}
+
 async function handleNFPhoto(input) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
@@ -3020,7 +3024,10 @@ function renderNotasPanel() {
       </div>
       <div class="cmv-panel-main-btns">
         <button class="cmv-mainbtn-foto" onclick="openCameraForNF()">
-          📷 Foto NF${geminiOk ? '' : ' ⚠'}
+          📷 Câmera${geminiOk ? '' : ' ⚠'}
+        </button>
+        <button class="cmv-mainbtn-foto cmv-mainbtn-galeria" onclick="openGaleriaForNF()">
+          🖼️ Galeria${geminiOk ? '' : ' ⚠'}
         </button>
         <button class="cmv-mainbtn-manual" onclick="openNFManual()">
           📝 Manual
