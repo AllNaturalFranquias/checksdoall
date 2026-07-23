@@ -1567,7 +1567,6 @@ function renderCMV() {
       <div class="cmv-config-header">
         <span class="cmv-config-title">Configuração (${semRef})</span>
         <div style="display:flex;gap:6px;align-items:center">
-          <button onclick="abrirVendas()" style="background:#f0faf5;border:1.5px solid #52b788;color:#2d6a4f;border-radius:7px;padding:5px 10px;font-size:.75rem;font-weight:700;cursor:pointer">📂 Importar xlsx</button>
           <button class="cmv-config-pin-btn" id="cmvConfigBtn" onclick="openCMVConfig()">🔒 Configurar</button>
         </div>
       </div>
@@ -2850,7 +2849,6 @@ function renderCMVPanel() {
           ${hasOutros ? `<span class="cmv-outros-alert">⚠ Notas sem linha</span>` : ''}
         </div>
         <div class="cmv-panel-icon-row">
-          ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="abrirVendas()" title="Importar faturamento xlsx">📂</button>` : ''}
           ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openCMVConfig()" title="Faturamento e meta">⚙️</button>` : ''}
           ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openLinhas()" title="Linhas de produto">📦</button>` : ''}
           ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openGeminiKeyModal()" title="Chave Gemini IA">🔑</button>` : ''}
