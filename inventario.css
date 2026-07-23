@@ -2813,9 +2813,10 @@ body { padding-bottom: 62px; }
   background: #faf7f4; border-radius: 8px; padding: 7px 10px;
   font-size: 12px;
 }
-.relat-formula-part { color: var(--muted); }
-.relat-formula-op { color: #bbb; font-weight: 700; }
-.relat-formula-result { font-weight: 800; color: var(--primary); }
+.relat-formula-part { color: var(--muted); vertical-align: top; }
+.relat-formula-part small.relat-formula-date { display: block; font-size: 10px; color: #aaa; line-height: 1.2; }
+.relat-formula-op { color: #bbb; font-weight: 700; vertical-align: top; padding-top: 2px; }
+.relat-formula-result { font-weight: 800; color: var(--primary); vertical-align: top; padding-top: 2px; }
 .relat-obs {
   font-size: 11px; font-weight: 600; border-radius: 6px;
   padding: 5px 8px; margin-top: 6px;
