@@ -1577,10 +1577,10 @@ body {
 }
 .cmv-icon-btn:active { background: rgba(255,255,255,0.22); }
 
-/* Botões principais Foto NF / Manual */
+/* Botões principais Câmera / Galeria / Manual */
 .cmv-panel-main-btns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   margin-bottom: 12px;
 }
