@@ -2368,7 +2368,8 @@ function showNFReview(geminiData) {
     preco_unitario: item.preco_unitario || 0,
     preco_total:    item.preco_total || (item.quantidade || 1) * (item.preco_unitario || 0),
     match:          findBestMatch(item.descricao || ''),
-    incluir:        true
+    incluir:        true,
+    linha:          ''
   }));
 
   renderNFItems();
@@ -2431,6 +2432,11 @@ function nfComboBlur(id) {
   }, 200);
 }
 
+function nfItemSetLinha(id, val) {
+  const item = nfExtractedItems.find(i => i.id === id);
+  if (item) item.linha = val;
+}
+
 function renderNFItems() {
   const list = document.getElementById('nfItemsList');
   if (!list) return;
@@ -2475,6 +2481,13 @@ function renderNFItems() {
             oninput="nfComboFilter(${item.id},this.value)"
             onblur="nfComboBlur(${item.id})">
           <div class="nf-combo-drop" id="nfdrop_${item.id}"></div>
+        </div>
+        <div class="nf-item-linha-row">
+          <label class="nf-meta-lbl">Linha CMV</label>
+          <select class="nf-item-linha-sel" onchange="nfItemSetLinha(${item.id},this.value)">
+            <option value="">— padrão da nota —</option>
+            ${(linhasConfig.linhas || []).map(l => `<option value="${escHtml(l)}"${item.linha === l ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+          </select>
         </div>
         <button class="nf-cadastrar-btn" id="nfcad_${item.id}"
           style="display:${matchVal ? 'none' : 'flex'}"
@@ -2632,16 +2645,29 @@ async function confirmNFItems() {
   // Salvar nota
   const d = getCMVData();
   if (!d.notas) d.notas = [];
-  const linha = document.getElementById('nfRevLinha')?.value || 'Outros';
-  learnFornecedorLinha(fornecedor, linha);
+  const defaultLinha = document.getElementById('nfRevLinha')?.value || 'Outros';
+
+  // Agrupar itens por linha (por item ou fallback para a linha global da nota)
+  const linhaMap = {};
+  for (const item of included) {
+    const l = item.linha || defaultLinha;
+    linhaMap[l] = (linhaMap[l] || 0) + (item.preco_total || 0);
+  }
+  const linhaEntries = Object.entries(linhaMap);
+  const linhaFields = linhaEntries.length === 1
+    ? { linha: linhaEntries[0][0] }
+    : { linhas: linhaEntries.map(([l, v]) => ({ linha: l, valor: +v.toFixed(2) })), linha: linhaEntries[0][0] };
+
+  learnFornecedorLinha(fornecedor, linhaEntries[0][0]);
   const itensResumo = included.map(i => ({
     nome: i.nome || i.descricao || '',
     quantidade: i.quantidade || 1,
     unidade: i.unidade || 'UN',
     preco_unitario: i.preco_unitario || 0,
-    valor: i.preco_total || 0
+    valor: i.preco_total || 0,
+    linha: i.linha || defaultLinha
   })).filter(i => i.nome);
-  d.notas.push({ id: Date.now().toString(36), fornecedor, linha, valor: total, data: dataFmt, ts: Date.now(), itens: itensResumo.length ? itensResumo : undefined });
+  d.notas.push({ id: Date.now().toString(36), fornecedor, ...linhaFields, valor: total, data: dataFmt, ts: Date.now(), itens: itensResumo.length ? itensResumo : undefined });
 
   // Atualizar cotações com preços lidos
   const q = getQuinzena(state.semana);
