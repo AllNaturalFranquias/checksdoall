@@ -682,7 +682,7 @@ function switchView(view) {
   document.querySelectorAll('.app-nav-item').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.view === view));
 
-  ['dashboard','contagem','cmv','config','comparativo','dre'].forEach(v => {
+  ['dashboard','contagem','cmv','notas','config','comparativo','dre'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
   });
@@ -696,6 +696,7 @@ function switchView(view) {
   if (view === 'dashboard')   renderDashboard();
   if (view === 'contagem')    renderContagemDash();
   if (view === 'cmv')         renderCMVPanel();
+  if (view === 'notas')       renderNotasPanel();
   if (view === 'config')      renderConfigView();
   if (view === 'comparativo') renderComparativo();
   if (view === 'dre')         renderDRE();
@@ -1724,6 +1725,7 @@ function saveNota() {
   closeAddNota();
   doSave();
   renderCMVPanel();
+  renderNotasPanel();
 }
 
 function openEditNota(id) {
@@ -1772,6 +1774,7 @@ function saveEditNota() {
   closeEditNota();
   doSave();
   renderCMVPanel();
+  renderNotasPanel();
   showToast('Nota atualizada ✓');
 }
 
@@ -1785,6 +1788,7 @@ function deleteNota(id) {
   d.notas = (d.notas || []).filter(n => n.id !== id);
   doSave();
   renderCMVPanel();
+  renderNotasPanel();
 }
 
 function fmt(n) {
@@ -2634,6 +2638,7 @@ async function confirmNFItems() {
   doSave();
   closeNFReview();
   renderCMVPanel();
+  renderNotasPanel();
   restoreValues();
   showToast(`NF salva ✓ · ${updatedPrices} preço${updatedPrices !== 1 ? 's' : ''} atualizado${updatedPrices !== 1 ? 's' : ''}`);
 }
@@ -2845,21 +2850,12 @@ function renderCMVPanel() {
           ${hasOutros ? `<span class="cmv-outros-alert">⚠ Notas sem linha</span>` : ''}
         </div>
         <div class="cmv-panel-icon-row">
+          ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="abrirVendas()" title="Importar faturamento xlsx">📂</button>` : ''}
           ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openCMVConfig()" title="Faturamento e meta">⚙️</button>` : ''}
           ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openLinhas()" title="Linhas de produto">📦</button>` : ''}
           ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openGeminiKeyModal()" title="Chave Gemini IA">🔑</button>` : ''}
           ${IS_ADMIN ? `<button class="cmv-icon-btn" onclick="openTrocarPin()" title="Meu PIN">👤</button>` : ''}
         </div>
-      </div>
-
-      <!-- Botões principais: Foto NF + Manual -->
-      <div class="cmv-panel-main-btns">
-        <button class="cmv-mainbtn-foto" onclick="openCameraForNF()">
-          📷 Foto NF${geminiOk ? '' : ' ⚠'}
-        </button>
-        <button class="cmv-mainbtn-manual" onclick="openNFManual()">
-          📝 Manual
-        </button>
       </div>
 
       <!-- KPIs -->
@@ -2905,24 +2901,70 @@ function renderCMVPanel() {
 
       ${linhaBreakdownHtml}
 
-      <!-- Notas com tabs Todas / Por Linha -->
-      <div class="cmv-panel-notas-section">
-        <button class="cmv-notas-toggle" onclick="toggleNotasDrawer(this)">
-          📋 ${notas.length} nota${notas.length !== 1 ? 's' : ''} · R$ ${fmt(total)}
-          <span class="cmv-notas-toggle-icon">▾</span>
-        </button>
-        <div class="cmv-notas-drawer" style="display:none">
-          <div class="cmv-notas-view-tabs">
-            <button class="cmv-nvtab active" onclick="switchNotasTab('todas',this)">Todas</button>
-            <button class="cmv-nvtab" onclick="switchNotasTab('linha',this)">Por Linha ${hasOutros ? '⚠' : ''}</button>
+    </div>
+  `;
+}
+
+// ── Aba Notas ─────────────────────────────────────────────────
+function renderNotasPanel() {
+  const container = document.getElementById('notasContent');
+  if (!container) return;
+
+  const d        = getCMVData();
+  const notas    = d.notas || [];
+  const total    = notas.reduce((s, n) => s + (n.valor || 0), 0);
+  const hasOutros = notas.some(n => (!n.linha && !n.linhas?.length) || n.linha === 'Outros');
+  const geminiOk = !!getGeminiKey();
+
+  const notasHtml = notas.length
+    ? notas.map(n => {
+        const linhasDisplay = n.linhas?.length
+          ? n.linhas.map(l => `<span class="cmv-panel-nota-linha">${escHtml(l.linha)} R$ ${fmt(l.valor)}</span>`).join('')
+          : n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>`
+                    : '<span class="cmv-panel-nota-linha" style="color:#f59e0b">sem linha ⚠</span>';
+        const itensCount = n.itens?.length ? `<span class="cmv-nota-itens-count">${n.itens.length} itens</span>` : '';
+        return `<div class="cmv-panel-nota cmv-panel-nota-clickable" onclick="openNotaDetail('${n.id}')">
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="cmv-panel-nota-forn">${escHtml(n.fornecedor)}</span>
+              ${itensCount}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px">${linhasDisplay}</div>
           </div>
-          <div id="notasTabTodas">
-            <div class="cmv-panel-notas-list">${notasHtml}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
+            <span class="cmv-panel-nota-val">R$ ${fmt(n.valor)}</span>
+            <span class="cmv-panel-nota-data">${n.data || ''}</span>
           </div>
-          <div id="notasTabLinha" style="display:none">
-            ${buildNotasByLinhaHtml(notas)}
-          </div>
+          <button class="cmv-nota-del" onclick="event.stopPropagation();deleteNota('${n.id}')">✕</button>
+        </div>`;
+      }).join('')
+    : `<p class="cmv-panel-notas-vazio">Nenhuma nota inserida nesta semana</p>`;
+
+  container.innerHTML = `
+    <div class="cmv-panel-header">
+      <div class="cmv-panel-topbar">
+        <div class="cmv-panel-topbar-left">
+          <span class="cmv-panel-week-label">${getWeekLabel(state.semana)}</span>
+          ${hasOutros ? `<span class="cmv-outros-alert">⚠ Notas sem linha</span>` : ''}
         </div>
+      </div>
+      <div class="cmv-panel-main-btns">
+        <button class="cmv-mainbtn-foto" onclick="openCameraForNF()">
+          📷 Foto NF${geminiOk ? '' : ' ⚠'}
+        </button>
+        <button class="cmv-mainbtn-manual" onclick="openNFManual()">
+          📝 Manual
+        </button>
+      </div>
+      <div class="cmv-notas-view-tabs" style="display:flex;gap:6px;padding:8px 0 4px">
+        <button class="cmv-nvtab active" onclick="switchNotasTab('todas',this)">Todas (${notas.length})</button>
+        <button class="cmv-nvtab" onclick="switchNotasTab('linha',this)">Por Linha ${hasOutros ? '⚠' : ''}</button>
+      </div>
+      <div id="notasTabTodas">
+        <div class="cmv-panel-notas-list">${notasHtml}</div>
+      </div>
+      <div id="notasTabLinha" style="display:none">
+        ${buildNotasByLinhaHtml(notas)}
       </div>
     </div>
   `;
@@ -3376,6 +3418,7 @@ function saveNotaDetailSplit() {
   if (_notaDetailFornecedor.trim()) learnFornecedorLinha(_notaDetailFornecedor.trim(), nota.linha || '');
   scheduleSave();
   renderCMVPanel();
+  renderNotasPanel();
   closeNotaDetail();
   showToast('Nota salva ✓');
 }
