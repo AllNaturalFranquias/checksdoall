@@ -8,7 +8,7 @@
   <title>Controles Estoque</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="inventario.css?v=27">
+  <link rel="stylesheet" href="inventario.css?v=28">
 </head>
 <body>
 
@@ -133,8 +133,10 @@
   }
   </script>
 
-  <!-- Input oculto para câmera/foto de NF -->
+  <!-- Inputs ocultos para NF: câmera direta e galeria/arquivos -->
   <input type="file" accept="image/*" capture="environment" id="nfCamera"
+         style="display:none" onchange="handleNFPhoto(this)">
+  <input type="file" accept="image/*" id="nfGaleria"
          style="display:none" onchange="handleNFPhoto(this)">
 
   <!-- Modal: Revisão de NF lida por foto -->
@@ -489,6 +491,6 @@
   </div>
 
   <script src="fichas_const.js?v=1"></script>
-  <script src="inventario.js?v=30"></script>
+  <script src="inventario.js?v=31"></script>
 </body>
 </html>
