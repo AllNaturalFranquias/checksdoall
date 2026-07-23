@@ -2849,9 +2849,11 @@ body { padding-bottom: 62px; }
   font-family: inherit; margin-top: 8px; width: 100%;
 }
 
-/* Melhorias visuais do bottom nav */
-.app-bottom-nav { max-width: 480px; left: 50%; transform: translateX(-50%); }
-@media (min-width: 480px) {
-  main.inv-sections { max-width: 480px; margin: 0 auto; }
-  .inv-header { max-width: 480px; left: 50%; transform: translateX(-50%); }
+/* Layout responsivo: mobile estreito, desktop largo */
+@media (max-width: 600px) {
+  .app-bottom-nav { max-width: 100%; left: 0; transform: none; }
+}
+@media (min-width: 600px) {
+  main.inv-sections { max-width: 960px; margin: 0 auto; }
+  .inv-header-inner { max-width: 960px; margin: 0 auto; }
 }
