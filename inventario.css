@@ -1231,11 +1231,31 @@ body {
 /* ── Modal revisão NF ────────────────────────────────────────── */
 .nf-review-modal {
   max-width: 480px;
-  max-height: 88vh;
-  overflow-y: auto;
+  max-height: 90vh;
+  overflow: hidden;
   text-align: left;
+  display: flex;
+  flex-direction: column;
 }
-.nf-review-modal h2 { text-align: center; }
+.nf-review-modal h2 { text-align: center; flex-shrink: 0; }
+
+.nf-review-hdr  { flex-shrink: 0; }
+.nf-review-body { flex: 1; overflow-y: auto; min-height: 0; padding: 0 2px; }
+.nf-review-ftr  { flex-shrink: 0; border-top: 1px solid #f0f0f0; padding-top: 8px; margin-top: 4px; }
+
+/* Busca sticky dentro da área de itens */
+.nf-search-sticky {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 10;
+  padding: 6px 0 8px;
+}
+.nf-items-label {
+  font-size: 11px; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin: 0 0 6px;
+}
 
 /* Spinner de loading */
 .nf-spinner {
@@ -1250,12 +1270,28 @@ body {
 
 /* Lista de itens */
 .nf-items-list {
-  margin-bottom: 12px;
-  max-height: 42vh;
-  overflow-y: auto;
+  margin-bottom: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  overflow: visible;
 }
+
+/* Combo searchable (substitui select de vínculo ao inventário) */
+.nf-combo-wrap { position: relative; margin-top: 4px; }
+.nf-combo-inp {
+  width: 100%; box-sizing: border-box;
+  padding: 7px 10px; border: 1.5px solid #e5e7eb; border-radius: 7px;
+  font-size: 12px; font-family: inherit; background: #fafbfc; color: var(--text);
+}
+.nf-combo-inp:focus { border-color: var(--primary); outline: none; background: #fff; }
+.nf-combo-drop {
+  display: none; position: absolute; top: calc(100% + 3px); left: 0; right: 0;
+  background: #fff; border: 1.5px solid #e5e7eb; border-radius: 8px;
+  z-index: 300; max-height: 200px; overflow-y: auto;
+  box-shadow: 0 6px 20px rgba(0,0,0,.15);
+}
+.nf-combo-opt { padding: 9px 12px; font-size: 12px; cursor: pointer; color: var(--text); }
+.nf-combo-opt:hover { background: #f0faf5; color: var(--primary); }
 
 .nf-item {
   display: flex;
