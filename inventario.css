@@ -1278,9 +1278,14 @@ body {
 
 /* Combo searchable (substitui select de vínculo ao inventário) */
 .nf-combo-wrap { position: relative; margin-top: 4px; }
+.nf-combo-inp-wrap { position: relative; }
+.nf-combo-icon {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  font-size: 13px; color: #9ca3af; pointer-events: none; line-height: 1;
+}
 .nf-combo-inp {
   width: 100%; box-sizing: border-box;
-  padding: 7px 10px; border: 1.5px solid #e5e7eb; border-radius: 7px;
+  padding: 7px 10px 7px 28px; border: 1.5px solid #e5e7eb; border-radius: 7px;
   font-size: 12px; font-family: inherit; background: #fafbfc; color: var(--text);
 }
 .nf-combo-inp:focus { border-color: var(--primary); outline: none; background: #fff; }
