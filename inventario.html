@@ -8,7 +8,7 @@
   <title>Controles Estoque</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="inventario.css?v=21">
+  <link rel="stylesheet" href="inventario.css?v=22">
 </head>
 <body>
 
@@ -87,7 +87,11 @@
     <!-- CMV view -->
     <div class="inv-view" id="view-cmv" style="display:none">
       <div id="cmvPanel" class="cmv-top-panel"></div>
-      <div id="cmvViewContent"></div>
+    </div>
+
+    <!-- Notas view -->
+    <div class="inv-view" id="view-notas" style="display:none">
+      <div id="notasContent"></div>
     </div>
 
     <!-- Config view -->
@@ -388,6 +392,10 @@
       <span class="app-nav-icon">📊</span>
       <span class="app-nav-label">CMV</span>
     </button>
+    <button class="app-nav-item" data-view="notas" onclick="switchView('notas')">
+      <span class="app-nav-icon">🧾</span>
+      <span class="app-nav-label">Notas</span>
+    </button>
     <button class="app-nav-item" data-view="comparativo" onclick="switchView('comparativo')">
       <span class="app-nav-icon">📉</span>
       <span class="app-nav-label">Comparativo</span>
@@ -472,6 +480,6 @@
   </div>
 
   <script src="fichas_const.js?v=1"></script>
-  <script src="inventario.js?v=22"></script>
+  <script src="inventario.js?v=23"></script>
 </body>
 </html>
