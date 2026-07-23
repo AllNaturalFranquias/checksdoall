@@ -2475,11 +2475,14 @@ function renderNFItems() {
         </div>
         <span class="nf-match-badge ${matchBadge}">${matchLabel}</span>
         <div class="nf-combo-wrap" id="nfcombo_${item.id}">
-          <input class="nf-combo-inp" type="text" value="${escHtml(comboLabel)}"
-            placeholder="Buscar no inventário..." autocomplete="off"
-            onfocus="nfComboOpen(${item.id})"
-            oninput="nfComboFilter(${item.id},this.value)"
-            onblur="nfComboBlur(${item.id})">
+          <div class="nf-combo-inp-wrap">
+            <span class="nf-combo-icon">🔍</span>
+            <input class="nf-combo-inp" type="text" value="${escHtml(comboLabel)}"
+              placeholder="Buscar no inventário..." autocomplete="off"
+              onfocus="nfComboOpen(${item.id})"
+              oninput="nfComboFilter(${item.id},this.value)"
+              onblur="nfComboBlur(${item.id})">
+          </div>
           <div class="nf-combo-drop" id="nfdrop_${item.id}"></div>
         </div>
         <div class="nf-item-linha-row">
