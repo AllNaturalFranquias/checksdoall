@@ -8,7 +8,7 @@
   <title>Controles Estoque</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="inventario.css?v=24">
+  <link rel="stylesheet" href="inventario.css?v=25">
 </head>
 <body>
 
@@ -145,35 +145,44 @@
         <div class="nf-spinner"></div>
         <p style="margin-top:14px;color:#666;font-size:13px">Lendo a nota com IA...</p>
       </div>
-      <div id="nfReviewContent" style="display:none">
-        <div class="nota-field">
-          <label>Fornecedor</label>
-          <input id="nfRevFornecedor" type="text" placeholder="Nome do fornecedor" autocomplete="off"
-                 oninput="autoFillLinha('nfRevLinha', this.value)">
+      <div id="nfReviewContent" style="display:none;display:flex;flex-direction:column;min-height:0;flex:1">
+        <!-- Header fixo: fornecedor / linha / data -->
+        <div class="nf-review-hdr">
+          <div class="nota-field">
+            <label>Fornecedor</label>
+            <input id="nfRevFornecedor" type="text" placeholder="Nome do fornecedor" autocomplete="off"
+                   oninput="autoFillLinha('nfRevLinha', this.value)">
+          </div>
+          <div class="nota-field">
+            <label>Linha de produto</label>
+            <select id="nfRevLinha" class="inv-select-linha"></select>
+          </div>
+          <div class="nota-field nf-data-field">
+            <label>Data da NF <span class="nf-data-warn" id="nfDataWarn"></span></label>
+            <input id="nfRevData" type="date" onchange="checkNFDate(this.value)">
+            <span class="nf-data-hint" id="nfDataHint"></span>
+          </div>
         </div>
-        <div class="nota-field">
-          <label>Linha de produto</label>
-          <select id="nfRevLinha" class="inv-select-linha"></select>
+        <!-- Área de itens: search sticky + lista scrollável -->
+        <div class="nf-review-body">
+          <div class="nf-search-sticky">
+            <p class="nf-items-label">Itens encontrados — vincule ao inventário</p>
+            <div style="position:relative">
+              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:#9ca3af;pointer-events:none">🔍</span>
+              <input id="nfItemSearch" type="text" placeholder="Filtrar itens da nota..."
+                style="width:100%;box-sizing:border-box;padding:8px 10px 8px 32px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit"
+                oninput="renderNFItems()">
+            </div>
+          </div>
+          <div class="nf-items-list" id="nfItemsList"></div>
         </div>
-        <div class="nota-field nf-data-field">
-          <label>Data da NF <span class="nf-data-warn" id="nfDataWarn"></span></label>
-          <input id="nfRevData" type="date" onchange="checkNFDate(this.value)">
-          <span class="nf-data-hint" id="nfDataHint"></span>
+        <!-- Rodapé fixo: ações -->
+        <div class="nf-review-ftr">
+          <button class="nf-add-item-btn" onclick="addNFManualItem()">+ Adicionar item</button>
+          <div class="nf-total">Total incluído: <strong id="nfTotalConfirmado">R$ 0,00</strong></div>
+          <button class="inv-modal-btn" onclick="confirmNFItems()">✓ Confirmar e Salvar</button>
+          <button class="inv-modal-cancel" onclick="closeNFReview()">Cancelar</button>
         </div>
-        <p style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 8px">
-          Itens encontrados — selecione o item correspondente
-        </p>
-        <div style="position:relative;margin-bottom:8px">
-          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:#9ca3af">🔍</span>
-          <input id="nfItemSearch" type="text" placeholder="Pesquisar item..."
-            style="width:100%;box-sizing:border-box;padding:8px 10px 8px 32px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit"
-            oninput="renderNFItems()">
-        </div>
-        <div class="nf-items-list" id="nfItemsList"></div>
-        <button class="nf-add-item-btn" onclick="addNFManualItem()">+ Adicionar item</button>
-        <div class="nf-total">Total incluído: <strong id="nfTotalConfirmado">R$ 0,00</strong></div>
-        <button class="inv-modal-btn" onclick="confirmNFItems()">✓ Confirmar e Salvar</button>
-        <button class="inv-modal-cancel" onclick="closeNFReview()">Cancelar</button>
       </div>
     </div>
   </div>
@@ -480,6 +489,6 @@
   </div>
 
   <script src="fichas_const.js?v=1"></script>
-  <script src="inventario.js?v=27"></script>
+  <script src="inventario.js?v=28"></script>
 </body>
 </html>
