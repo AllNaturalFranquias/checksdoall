@@ -1433,6 +1433,24 @@ body {
 }
 .nf-cadastrar-btn:active { background: #dcfce7; }
 
+.nf-item-linha-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.nf-item-linha-sel {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  background: #f9fafb;
+  color: #374151;
+  cursor: pointer;
+}
+.nf-item-linha-sel:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
 .nf-total {
   font-size: 14px;
   color: var(--muted);
