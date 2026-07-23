@@ -2774,7 +2774,14 @@ body { padding-bottom: 62px; }
 
 /* Nota card clicável */
 .cmv-panel-nota-clickable { cursor: pointer; }
-.cmv-panel-nota-clickable:active { background: #f3f4f6; }
+.cmv-panel-nota-clickable:active { background: rgba(255,255,255,0.08); }
+
+/* Aba Notas — sobrescreve CMV para full-height e sem border-bottom */
+.notas-top-panel { border-bottom: none; padding-bottom: 80px; }
+.notas-top-panel .cmv-panel-notas-list { max-height: none; overflow-y: visible; }
+.notas-top-panel .cmv-nvtab.active { background: rgba(255,255,255,0.22); border-color: transparent; color: #fff; }
+.notas-top-panel .cmv-nvtab { color: rgba(255,255,255,0.6); border-color: rgba(255,255,255,0.18); }
+.notas-top-panel .cmv-panel-notas-vazio { color: rgba(255,255,255,0.5); text-align: center; padding: 32px 0; font-size: 14px; }
 .cmv-nota-itens-count {
   font-size: 10px; font-weight: 700; color: #fff;
   background: #3b82f6; border-radius: 20px;
