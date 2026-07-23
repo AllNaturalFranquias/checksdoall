@@ -729,15 +729,11 @@ function renderDashboard() {
     : cmvYTD > pct       ? '#f59e0b' : '#22c55e';
 
   const allNotas = Object.values(state.cmv || {}).flatMap(d => d?.notas || []);
-  const parseDDMMYYYY = s => { if (!s) return 0; const [d,m,y] = s.split('/'); return new Date(+y,+m-1,+d).getTime(); };
-  const notasSorted = allNotas.filter(n => n.ts || n.data).sort((a,b) => {
-    const ta = a.ts || parseDDMMYYYY(a.data);
-    const tb = b.ts || parseDDMMYYYY(b.data);
-    return tb - ta;
-  });
-  const lastNotaObj = notasSorted[0];
+  // Dashboard usa apenas ts (momento do lançamento no app), nunca a data da NF
+  const notasComTs = allNotas.filter(n => n.ts).sort((a, b) => b.ts - a.ts);
+  const lastNotaObj = notasComTs[0];
   const lastNota = lastNotaObj
-    ? (lastNotaObj.ts ? new Date(lastNotaObj.ts).toLocaleDateString('pt-BR') : lastNotaObj.data)
+    ? new Date(lastNotaObj.ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '—';
   const lastCount = state.lastCountDate
     ? new Date(state.lastCountDate).toLocaleDateString('pt-BR') : '—';
