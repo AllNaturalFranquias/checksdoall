@@ -71,67 +71,42 @@ const BASE_SECTIONS = [
       {
         group: 'Verduranet',
         items: [
-          { name: 'Abobrinha Espaguete', unit: 'un' },
-          { name: 'Alface Americana', unit: 'un' },
-          { name: 'Cenoura Espaguete', unit: 'un' },
-          { name: 'Cenoura Ralada', unit: 'un' },
-          { name: 'Escarola', unit: 'un' },
-          { name: 'Mix de Folhas', unit: 'un' },
-          { name: 'Pupunha Espaguete', unit: 'un' },
+          { name: 'Abobrinha Espaguete', unit: 'pct' },
+          { name: 'Alface Americana', unit: 'pct' },
+          { name: 'Cenoura Espaguete', unit: 'pct' },
+          { name: 'Cenoura Ralada', unit: 'pct' },
+          { name: 'Escarola', unit: 'pct' },
+          { name: 'Mix de Folhas', unit: 'pct' },
+          { name: 'Pupunha Espaguete', unit: 'pct' },
         ]
       },
       {
         group: 'Ceasa',
         items: [
-          { name: 'Abacate', unit: 'un' },
+          { name: 'Abacate', unit: 'kg' },
           { name: 'Abóbora Cabotia', unit: 'un' },
           { name: 'Abobrinha', unit: 'un' },
           { name: 'Alho Sem Casca', unit: 'un' },
-          { name: 'Batata Branca Inglesa', unit: 'un' },
-          { name: 'Batata Doce', unit: 'cx' },
-          { name: 'Cebola Branca', unit: 'un' },
-          { name: 'Cebola Roxa', unit: 'un' },
+          { name: 'Batata Branca Inglesa', unit: 'kg' },
+          { name: 'Brócolis', unit: 'pct' },
+          { name: 'Cebola Branca', unit: 'kg' },
+          { name: 'Cebola Roxa', unit: 'kg' },
           { name: 'Cebolinha', unit: 'maço' },
-          { name: 'Cenoura Inteira', unit: 'un' },
+          { name: 'Cenoura Inteira', unit: 'kg' },
           { name: 'Couve', unit: 'maço' },
-          { name: 'Couve-Flor', unit: 'un' },
-          { name: 'Espinafre', unit: 'maço' },
-          { name: 'Limão', unit: 'un' },
+          { name: 'Couve-Flor', unit: 'pct' },
+          { name: 'Limão', unit: 'kg' },
           { name: 'Maçã Fuji para Geleia', unit: 'un' },
-          { name: 'Manga', unit: 'un' },
           { name: 'Mandioca Descascada', unit: 'kg' },
           { name: 'Manjericão', unit: 'maço' },
-          { name: 'Morango', unit: 'cx' },
-          { name: 'Ovo', unit: 'dz' },
-          { name: 'Pepino Japonês', unit: 'un' },
-          { name: 'Pimenta Dedo de Moça', unit: 'un' },
-          { name: 'Repolho Roxo', unit: 'un' },
-          { name: 'Repolho Branco', unit: 'un' },
+          { name: 'Ovo', unit: 'cx' },
+          { name: 'Pepino Japonês', unit: 'kg' },
+          { name: 'Pimenta Dedo de Moça', unit: 'bdj' },
+          { name: 'Repolho Roxo', unit: 'kg' },
+          { name: 'Repolho Branco', unit: 'kg' },
           { name: 'Salsinha', unit: 'maço' },
-          { name: 'Tomate Cereja', unit: 'cx' },
-          { name: 'Tomate Italiano', unit: 'un' },
-        ]
-      },
-      {
-        group: 'Bebidas',
-        items: [
-          { name: 'Água com Gás', unit: 'un' },
-          { name: 'Água Sem Gás', unit: 'un' },
-          { name: 'Cerveja', unit: 'un' },
-          { name: 'Chá de Hibisco', unit: 'un' },
-          { name: 'Chá Mate', unit: 'un' },
-          { name: 'Coca Zero', unit: 'un' },
-          { name: 'Kombucha Maracujá c/ Gengibre', unit: 'un' },
-          { name: 'Kombucha Açaí c/ Cravo', unit: 'un' },
-          { name: 'Kombucha Guaraná c/ Laranja', unit: 'un' },
-          { name: 'Kombucha Berry c/ Hibisco', unit: 'un' },
-          { name: 'Suco de Laranja', unit: 'un' },
-          { name: 'Suco Detox', unit: 'un' },
-          { name: 'Suco Refrescante', unit: 'un' },
-          { name: 'Suco Thermofresh', unit: 'un' },
-          { name: 'Vinho Branco', unit: 'un' },
-          { name: 'Vinho Rosé', unit: 'un' },
-          { name: 'Vinho Tinto', unit: 'un' },
+          { name: 'Tomate Cereja', unit: 'kg' },
+          { name: 'Tomate Italiano', unit: 'kg' },
         ]
       },
       {
@@ -142,16 +117,6 @@ const BASE_SECTIONS = [
           { name: 'Mousse Chocolate com Pasta', unit: 'un' },
         ]
       },
-      {
-        group: 'Snacks',
-        items: [
-          { name: 'Coxinha', unit: 'un' },
-          { name: 'Palitinhos de Tapioca', unit: 'un' },
-          { name: 'Sanduíche Natural', unit: 'un' },
-          { name: 'Tortinha Frango e Legumes', unit: 'un' },
-          { name: 'Tortinha Legumes', unit: 'un' },
-        ]
-      }
     ]
   },
   {
@@ -196,6 +161,7 @@ const BASE_SECTIONS = [
           { name: 'Tortilha de Wrap', unit: 'un' },
           { name: 'Vinagre Balsâmico', unit: 'un' },
           { name: 'Vinagre de Vinho Tinto', unit: 'un' },
+          { name: 'Alho Frito', unit: 'kg' },
         ]
       },
       {
@@ -215,6 +181,7 @@ const BASE_SECTIONS = [
           { name: 'Pimenta Preta em Pó', unit: 'un' },
           { name: 'Semente de Girassol', unit: 'un' },
           { name: 'Semente de Linhaça', unit: 'un' },
+          { name: 'Quinoa', unit: 'kg' },
         ]
       },
       {
@@ -251,6 +218,16 @@ const BASE_SECTIONS = [
         group: 'Pães',
         items: [
           { name: 'Pão Integral Charlotte', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Snacks',
+        items: [
+          { name: 'Coxinha', unit: 'un' },
+          { name: 'Palitinhos de Tapioca', unit: 'porção' },
+          { name: 'Sanduíche Natural', unit: 'un' },
+          { name: 'Tortinha Frango e Legumes', unit: 'un' },
+          { name: 'Tortinha Legumes', unit: 'un' },
         ]
       }
     ]
@@ -445,17 +422,48 @@ const BASE_SECTIONS = [
     label: 'BEBIDAS',
     groups: [
       {
-        group: 'Bebidas',
+        group: 'Água e Refrigerantes',
         items: [
+          { name: 'Água com Gás', unit: 'un' },
+          { name: 'Água Sem Gás', unit: 'un' },
           { name: 'Água Mineral 500ml', unit: 'cx' },
           { name: 'Água Mineral 1,5L', unit: 'cx' },
+          { name: 'Coca Zero', unit: 'un' },
           { name: 'Refrigerante Lata', unit: 'cx' },
           { name: 'Refrigerante PET 2L', unit: 'un' },
-          { name: 'Suco de Laranja Natural', unit: 'lt' },
-          { name: 'Suco de Caixinha', unit: 'cx' },
           { name: 'Energético', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Sucos e Chás',
+        items: [
+          { name: 'Chá de Hibisco', unit: 'un' },
+          { name: 'Chá Mate', unit: 'un' },
+          { name: 'Suco de Caixinha', unit: 'cx' },
+          { name: 'Suco de Laranja Natural', unit: 'pct' },
+          { name: 'Suco Detox', unit: 'un' },
+          { name: 'Suco Refrescante', unit: 'un' },
+          { name: 'Suco Thermofresh', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Kombuchas',
+        items: [
+          { name: 'Kombucha Maracujá c/ Gengibre', unit: 'un' },
+          { name: 'Kombucha Açaí c/ Cravo', unit: 'un' },
+          { name: 'Kombucha Guaraná c/ Laranja', unit: 'un' },
+          { name: 'Kombucha Berry c/ Hibisco', unit: 'un' },
+        ]
+      },
+      {
+        group: 'Cervejas e Vinhos',
+        items: [
+          { name: 'Cerveja', unit: 'un' },
           { name: 'Cerveja Lata', unit: 'cx' },
           { name: 'Vinho', unit: 'un' },
+          { name: 'Vinho Branco', unit: 'un' },
+          { name: 'Vinho Rosé', unit: 'un' },
+          { name: 'Vinho Tinto', unit: 'un' },
         ]
       }
     ]
