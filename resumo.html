@@ -221,12 +221,11 @@
         return { key, label: getWeekLabel(key), fat, meta, gasto, real, prog, notas };
       });
 
-      // Última NF — n.ts como referência (sempre presente), n.data para exibição
-      let lastNF = null, lastNFts = 0;
+      // Última NF — usa n.ts (momento do lançamento no app), não a data da nota
+      let lastNFts = 0;
       for (const wk of weeks) {
         for (const n of wk.notas) {
-          const ts = n.ts || (n.data ? (parseDDMMYYYY(n.data)?.getTime() || 0) : 0);
-          if (ts > lastNFts) { lastNFts = ts; lastNF = n.data || null; }
+          if ((n.ts || 0) > lastNFts) lastNFts = n.ts;
         }
       }
 
@@ -247,7 +246,7 @@
       }
       const topLinhas = Object.entries(linhaMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-      return { weeks, lastNF, lastNFts, lastCount: data?.lastCountDate || null, topLinhas };
+      return { weeks, lastNFts, lastCount: data?.lastCountDate || null, topLinhas };
     }
 
     /* ── Card de unidade ── */
@@ -255,8 +254,9 @@
       const label = UNIT_LABELS[unit];
       const m     = calcUnit(data);
 
-      const nfDays  = m.lastNFts > 0 ? Math.floor((Date.now() - m.lastNFts) / 86400000) : null;
-      const cntDays = daysSince(m.lastCount);
+      const nfDays    = m.lastNFts > 0 ? Math.floor((Date.now() - m.lastNFts) / 86400000) : null;
+      const nfDisplay = m.lastNFts > 0 ? new Date(m.lastNFts).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : null;
+      const cntDays   = daysSince(m.lastCount);
       const nfChip  = nfDays  == null ? '' : nfDays  > 7  ? 'alert' : 'good';
       const cntChip = cntDays == null ? '' : cntDays > 10 ? 'alert' : 'good';
       const nfCls   = nfDays  == null ? '' : nfDays  > 7  ? 'old'   : 'ok';
@@ -315,7 +315,7 @@
           <div class="r-dates">
             <div class="r-date-chip ${nfChip}">
               <div class="r-date-label">Última NF</div>
-              <div class="r-date-val ${nfCls}">${m.lastNF ? m.lastNF.slice(0, 5) : '—'}</div>
+              <div class="r-date-val ${nfCls}">${nfDisplay || '—'}</div>
               <div class="r-date-sub">${nfDays != null ? nfDays + ' dias atrás' : 'sem registro'}</div>
             </div>
             <div class="r-date-chip ${cntChip}">
