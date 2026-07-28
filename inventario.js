@@ -1826,7 +1826,11 @@ async function loadFromCloud() {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
       restoreValues();
       updateAllBadges();
+      renderContagemDash();
       updateSavedLabel();
+      const dash = document.getElementById('view-dashboard');
+      if (dash && dash.style.display !== 'none') renderDashboard();
+      renderCMVPanel();
     }
     updateCloudStatus('ok');
   } catch (e) {
