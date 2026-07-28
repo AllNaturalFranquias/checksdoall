@@ -217,16 +217,13 @@
       const monthReal = monthFat > 0 ? (monthGasto / monthFat) * 100 : null;
       const monthMeta = monthCount > 0 ? monthMetaSum / monthCount : 30;
 
-      // Última NF — comparação por data real (DD/MM/YYYY)
+      // Última NF — usa n.ts (sempre presente) como referência; n.data para exibição
       let lastNF = null;
       let lastNFts = 0;
       for (const wk of weeks) {
         for (const n of wk.notas) {
-          if (n.data) {
-            const d = parseDDMMYYYY(n.data);
-            const ts = d ? d.getTime() : 0;
-            if (ts > lastNFts) { lastNFts = ts; lastNF = n.data; }
-          }
+          const ts = n.ts || (n.data ? (parseDDMMYYYY(n.data)?.getTime() || 0) : 0);
+          if (ts > lastNFts) { lastNFts = ts; lastNF = n.data || null; }
         }
       }
 
@@ -268,30 +265,35 @@
           </div>
         </div>` : `<div class="r-no-data">Sem faturamento registrado</div>`;
 
-      // Semanas
-      const weeksHtml = m.weeks.map(wk => {
-        if (wk.fat === 0) return `
-          <div class="r-week-row">
-            <div class="r-week-info">
-              <span class="r-week-name" style="font-size:11px">${wk.label}</span>
-              <span class="r-week-empty">sem faturamento</span>
-            </div>
-          </div>`;
-        const col = cmvColor(wk.real, wk.meta);
-        return `
-          <div class="r-week-row">
-            <div class="r-week-info">
-              <span class="r-week-name" style="font-size:11px">${wk.label}</span>
-              <div class="r-week-stats">
-                <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
-                <span class="r-week-stat">CMV <strong style="color:${col}">${wk.real.toFixed(1)}%</strong> <span style="color:#94a3b8">/ ${wk.meta}%</span></span>
+      // Semanas — filtra semanas sem nenhum dado
+      const weeksHtml = m.weeks
+        .filter(wk => wk.fat > 0 || wk.gasto > 0)
+        .map(wk => {
+          if (wk.fat === 0) return `
+            <div class="r-week-row">
+              <div class="r-week-info">
+                <span class="r-week-name" style="font-size:11px">${wk.label}</span>
+                <div class="r-week-stats">
+                  <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
+                  <span class="r-week-empty">sem fat. configurado</span>
+                </div>
               </div>
-            </div>
-            <div class="r-week-bar-bg">
-              <div class="r-week-bar-fill" style="width:${wk.prog.toFixed(1)}%;background:${col}"></div>
-            </div>
-          </div>`;
-      }).join('');
+            </div>`;
+          const col = cmvColor(wk.real, wk.meta);
+          return `
+            <div class="r-week-row">
+              <div class="r-week-info">
+                <span class="r-week-name" style="font-size:11px">${wk.label}</span>
+                <div class="r-week-stats">
+                  <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
+                  <span class="r-week-stat">CMV <strong style="color:${col}">${wk.real.toFixed(1)}%</strong> <span style="color:#94a3b8">/ ${wk.meta}%</span></span>
+                </div>
+              </div>
+              <div class="r-week-bar-bg">
+                <div class="r-week-bar-fill" style="width:${wk.prog.toFixed(1)}%;background:${col}"></div>
+              </div>
+            </div>`;
+        }).join('') || '<div class="r-no-data">Nenhuma nota lançada ainda.</div>';
 
       // Datas — lastNF já é DD/MM/YYYY, converte via parseDDMMYYYY para daysSince
       const nfDays  = m.lastNFts > 0 ? Math.floor((Date.now() - m.lastNFts) / 86400000) : null;
@@ -428,10 +430,8 @@
 
     async function render() {
       const allData = await Promise.all(UNITS.map(u => loadUnit(u).then(d => ({ unit: u, data: d }))));
-      const summary   = summaryCard(allData);
-      const unitCards = allData.map(({ unit, data }) => unitCard(unit, data)).join('');
       document.getElementById('unitsBlock').innerHTML =
-        summary + '<p class="r-section">Unidades</p>' + unitCards;
+        allData.map(({ unit, data }) => unitCard(unit, data)).join('');
     }
 
     document.addEventListener('DOMContentLoaded', render);
