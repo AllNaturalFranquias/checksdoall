@@ -183,43 +183,46 @@
       return `Sem. ${wNum} · ${f(mon)} – ${f(sun)}`;
     }
 
+    /* ── Chave ISO de uma data ── */
+    function getWeekKey(date) {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const day = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - day);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+    }
+
+    /* ── Últimas 4 semanas do calendário (mais antiga → mais recente) ── */
+    function last4Weeks() {
+      const keys = [];
+      const today = new Date();
+      for (let i = 3; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i * 7);
+        keys.push(getWeekKey(d));
+      }
+      return keys;
+    }
+
     /* ── Calcula métricas por unidade ── */
     function calcUnit(data) {
       const cmv = data?.cmv || {};
-      const weeks = [];
-      let monthFat = 0, monthGasto = 0, monthCount = 0, monthMetaSum = 0;
 
-      // Ordena semanas ISO mais recentes primeiro — pega as últimas 4
-      const allKeys = Object.keys(cmv).filter(k => k.includes('-W') || k.startsWith('semana_'));
-      const isoKeys = allKeys.filter(k => k.includes('-W')).sort().reverse();
-      const legacyKeys = allKeys.filter(k => k.startsWith('semana_')).sort().reverse();
-      const sortedKeys = [...isoKeys, ...legacyKeys].slice(0, 4).reverse();
-
-      sortedKeys.forEach((key, idx) => {
+      // Sempre mostra as últimas 4 semanas do calendário, com ou sem dados
+      const weeks = last4Weeks().map(key => {
         const d     = cmv[key] || {};
         const fat   = d.faturamento || 0;
         const meta  = d.meta_pct || 30;
         const notas = d.notas || [];
         const gasto = notas.reduce((s, n) => s + (n.valor || 0), 0);
         const real  = fat > 0 ? (gasto / fat) * 100 : null;
-        const metaV = fat > 0 ? fat * meta / 100 : null;
-        const prog  = metaV ? Math.min(gasto / metaV * 100, 100) : 0;
-        const label = key.includes('-W') ? getWeekLabel(key) : `Sem. ${idx+1}`;
-        weeks.push({ w: idx + 1, key, label, fat, meta, gasto, real, metaV, prog, notas });
-        if (fat > 0) {
-          monthFat   += fat;
-          monthGasto += gasto;
-          monthMetaSum += meta;
-          monthCount++;
-        }
+        const prog  = fat > 0 ? Math.min(gasto / (fat * meta / 100) * 100, 100) : 0;
+        return { key, label: getWeekLabel(key), fat, meta, gasto, real, prog, notas };
       });
 
-      const monthReal = monthFat > 0 ? (monthGasto / monthFat) * 100 : null;
-      const monthMeta = monthCount > 0 ? monthMetaSum / monthCount : 30;
-
-      // Última NF — usa n.ts (sempre presente) como referência; n.data para exibição
-      let lastNF = null;
-      let lastNFts = 0;
+      // Última NF — n.ts como referência (sempre presente), n.data para exibição
+      let lastNF = null, lastNFts = 0;
       for (const wk of weeks) {
         for (const n of wk.notas) {
           const ts = n.ts || (n.data ? (parseDDMMYYYY(n.data)?.getTime() || 0) : 0);
@@ -227,22 +230,24 @@
         }
       }
 
-      // Breakdown por linha (todas as semanas)
+      // Maiores linhas de gasto das últimas 4 semanas
       const linhaMap = {};
       for (const wk of weeks) {
         for (const n of wk.notas) {
           if (n.linhas?.length) {
-            n.linhas.forEach(l => { linhaMap[l.linha || 'Outros'] = (linhaMap[l.linha || 'Outros'] || 0) + (l.valor || 0); });
+            n.linhas.forEach(l => {
+              const k = l.linha || 'Outros';
+              linhaMap[k] = (linhaMap[k] || 0) + (l.valor || 0);
+            });
           } else {
-            const l = n.linha || 'Outros';
-            linhaMap[l] = (linhaMap[l] || 0) + (n.valor || 0);
+            const k = n.linha || 'Outros';
+            linhaMap[k] = (linhaMap[k] || 0) + (n.valor || 0);
           }
         }
       }
-      const linhas = Object.entries(linhaMap).sort((a,b) => b[1]-a[1]);
+      const topLinhas = Object.entries(linhaMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-      return { weeks, monthReal, monthMeta, monthCount, monthFat, monthGasto,
-               lastNF, lastNFts, lastCount: data?.lastCountDate || null, linhas };
+      return { weeks, lastNF, lastNFts, lastCount: data?.lastCountDate || null, topLinhas };
     }
 
     /* ── Card de unidade ── */
@@ -250,58 +255,56 @@
       const label = UNIT_LABELS[unit];
       const m     = calcUnit(data);
 
-      const monthColor = cmvColor(m.monthReal, m.monthMeta);
-
-      // Mensal
-      const monthHtml = m.monthCount > 0 ? `
-        <div class="r-monthly">
-          <div class="r-monthly-left">
-            <div class="r-monthly-label">CMV Mensal</div>
-            <div class="r-monthly-sub">${m.monthCount} sem. com faturamento · Gasto ${fmtR(m.monthGasto)}</div>
-          </div>
-          <div class="r-monthly-nums">
-            <span class="r-monthly-real" style="color:${monthColor}">${m.monthReal.toFixed(1)}%</span>
-            <span class="r-monthly-meta">meta ${m.monthMeta.toFixed(0)}%</span>
-          </div>
-        </div>` : `<div class="r-no-data">Sem faturamento registrado</div>`;
-
-      // Semanas — filtra semanas sem nenhum dado
-      const weeksHtml = m.weeks
-        .filter(wk => wk.fat > 0 || wk.gasto > 0)
-        .map(wk => {
-          if (wk.fat === 0) return `
-            <div class="r-week-row">
-              <div class="r-week-info">
-                <span class="r-week-name" style="font-size:11px">${wk.label}</span>
-                <div class="r-week-stats">
-                  <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
-                  <span class="r-week-empty">sem fat. configurado</span>
-                </div>
-              </div>
-            </div>`;
-          const col = cmvColor(wk.real, wk.meta);
-          return `
-            <div class="r-week-row">
-              <div class="r-week-info">
-                <span class="r-week-name" style="font-size:11px">${wk.label}</span>
-                <div class="r-week-stats">
-                  <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
-                  <span class="r-week-stat">CMV <strong style="color:${col}">${wk.real.toFixed(1)}%</strong> <span style="color:#94a3b8">/ ${wk.meta}%</span></span>
-                </div>
-              </div>
-              <div class="r-week-bar-bg">
-                <div class="r-week-bar-fill" style="width:${wk.prog.toFixed(1)}%;background:${col}"></div>
-              </div>
-            </div>`;
-        }).join('') || '<div class="r-no-data">Nenhuma nota lançada ainda.</div>';
-
-      // Datas — lastNF já é DD/MM/YYYY, converte via parseDDMMYYYY para daysSince
       const nfDays  = m.lastNFts > 0 ? Math.floor((Date.now() - m.lastNFts) / 86400000) : null;
       const cntDays = daysSince(m.lastCount);
-      const nfChip  = nfDays  != null && nfDays  > 14 ? 'alert' : nfDays  != null ? 'good' : '';
-      const cntChip = cntDays != null && cntDays > 10 ? 'alert' : cntDays != null ? 'good' : '';
-      const nfCls   = nfDays  != null && nfDays  > 14 ? 'old' : nfDays  != null ? 'ok' : '';
-      const cntCls  = cntDays != null && cntDays > 10 ? 'old' : cntDays != null ? 'ok' : '';
+      const nfChip  = nfDays  == null ? '' : nfDays  > 7  ? 'alert' : 'good';
+      const cntChip = cntDays == null ? '' : cntDays > 10 ? 'alert' : 'good';
+      const nfCls   = nfDays  == null ? '' : nfDays  > 7  ? 'old'   : 'ok';
+      const cntCls  = cntDays == null ? '' : cntDays > 10 ? 'old'   : 'ok';
+
+      const weeksHtml = m.weeks.map(wk => {
+        if (wk.fat === 0 && wk.gasto === 0) return `
+          <div class="r-week-row">
+            <div class="r-week-info">
+              <span class="r-week-name">${wk.label}</span>
+              <span class="r-week-empty">sem lançamentos</span>
+            </div>
+          </div>`;
+        if (wk.fat === 0) return `
+          <div class="r-week-row">
+            <div class="r-week-info">
+              <span class="r-week-name">${wk.label}</span>
+              <div class="r-week-stats">
+                <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
+                <span class="r-week-empty">fat. não configurado</span>
+              </div>
+            </div>
+          </div>`;
+        const col = cmvColor(wk.real, wk.meta);
+        return `
+          <div class="r-week-row">
+            <div class="r-week-info">
+              <span class="r-week-name">${wk.label}</span>
+              <div class="r-week-stats">
+                <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
+                <span class="r-week-stat">CMV <strong style="color:${col}">${wk.real.toFixed(1)}%</strong><span style="color:#94a3b8"> / ${wk.meta}%</span></span>
+              </div>
+            </div>
+            <div class="r-week-bar-bg">
+              <div class="r-week-bar-fill" style="width:${wk.prog.toFixed(1)}%;background:${col}"></div>
+            </div>
+          </div>`;
+      }).join('');
+
+      const linhasHtml = m.topLinhas.length > 0 ? `
+        <div style="padding:8px 14px 12px;border-top:1px solid #f1f5f9">
+          <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Maiores gastos · últimas 4 sem.</div>
+          ${m.topLinhas.map(([l, v]) => `
+            <div style="display:flex;justify-content:space-between;padding:2px 0">
+              <span style="font-size:12px;color:#475569">${l}</span>
+              <span style="font-size:12px;font-weight:700;color:#1e293b">${fmtR(v)}</span>
+            </div>`).join('')}
+        </div>` : '';
 
       return `
         <div class="r-unit-card">
@@ -309,24 +312,10 @@
             <span class="r-unit-nome">${label}</span>
             <a class="r-unit-link" href="inventario.html?u=${unit}">Abrir →</a>
           </div>
-          ${monthHtml}
-          <div class="r-weeks">
-            <div class="r-weeks-title">Acompanhamento semanal</div>
-            ${weeksHtml}
-          </div>
-          ${m.linhas.length > 0 ? `
-          <div style="padding:8px 14px;border-top:1px solid #f1f5f9">
-            <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Por linha · acumulado mês</div>
-            ${m.linhas.map(([l,v]) => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">
-                <span style="font-size:12px;color:#475569;font-weight:500">${l}</span>
-                <span style="font-size:12px;font-weight:700;color:#1e293b">R$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
-              </div>`).join('')}
-          </div>` : ''}
           <div class="r-dates">
             <div class="r-date-chip ${nfChip}">
               <div class="r-date-label">Última NF</div>
-              <div class="r-date-val ${nfCls}">${m.lastNF ? m.lastNF.slice(0,5) : '—'}</div>
+              <div class="r-date-val ${nfCls}">${m.lastNF ? m.lastNF.slice(0, 5) : '—'}</div>
               <div class="r-date-sub">${nfDays != null ? nfDays + ' dias atrás' : 'sem registro'}</div>
             </div>
             <div class="r-date-chip ${cntChip}">
@@ -335,84 +324,11 @@
               <div class="r-date-sub">${cntDays != null ? cntDays + ' dias atrás' : 'sem registro'}</div>
             </div>
           </div>
-        </div>`;
-    }
-
-    /* ── Card resumo geral ── */
-    function summaryCard(allData) {
-      // Coleta todas as semanas ISO de todas as unidades e pega as últimas 4
-      const weekSet = new Set();
-      for (const { data } of allData) {
-        Object.keys(data?.cmv || {}).filter(k => k.includes('-W')).forEach(k => weekSet.add(k));
-      }
-      const sortedWeeks = Array.from(weekSet).sort().slice(-4);
-
-      let totFat = 0, totGasto = 0, metaSum = 0, metaCount = 0;
-
-      const weekTotals = sortedWeeks.map(wk => {
-        let fat = 0, gasto = 0, metaAcc = 0, count = 0;
-        for (const { data } of allData) {
-          const d = data?.cmv?.[wk] || {};
-          if (!d.faturamento) continue;
-          const g = (d.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
-          fat     += d.faturamento;
-          gasto   += g;
-          metaAcc += (d.meta_pct || 30);
-          count++;
-        }
-        if (fat > 0) { totFat += fat; totGasto += gasto; metaSum += metaAcc / (count || 1); metaCount++; }
-        return { key: wk, label: getWeekLabel(wk), fat, gasto, meta: metaAcc, count };
-      });
-
-      const realMensal = totFat > 0 ? (totGasto / totFat) * 100 : null;
-      const metaMensal = metaCount > 0 ? metaSum / metaCount : 30;
-      const col        = cmvColor(realMensal, metaMensal);
-
-      const weeksHtml = weekTotals.length === 0
-        ? `<div style="color:#475569;font-size:12px;padding:8px 0">Nenhuma semana com dados ainda.</div>`
-        : weekTotals.map(wk => {
-            if (wk.fat === 0) return `
-              <div class="r-week-row">
-                <div class="r-week-info">
-                  <span class="r-week-name" style="color:#94a3b8">${wk.label}</span>
-                  <span class="r-week-empty" style="color:#475569">sem dados</span>
-                </div>
-              </div>`;
-            const real = (wk.gasto / wk.fat) * 100;
-            const meta = wk.meta / wk.count;
-            const prog = Math.min(wk.gasto / (wk.fat * meta / 100) * 100, 100);
-            const c    = cmvColor(real, meta);
-            return `
-              <div class="r-week-row">
-                <div class="r-week-info">
-                  <span class="r-week-name" style="color:#e2e8f0">${wk.label} · ${wk.count} unid.</span>
-                  <div class="r-week-stats">
-                    <span class="r-week-stat" style="color:#94a3b8">Fat. <strong style="color:#cbd5e1">${fmtR(wk.fat)}</strong></span>
-                    <span class="r-week-stat" style="color:#94a3b8">Gasto <strong style="color:#cbd5e1">${fmtR(wk.gasto)}</strong></span>
-                    <span class="r-week-stat" style="color:#94a3b8">CMV <strong style="color:${c}">${real.toFixed(1)}%</strong> <span style="color:#475569">/ ${meta.toFixed(0)}%</span></span>
-                  </div>
-                </div>
-                <div class="r-week-bar-bg" style="background:rgba(255,255,255,.1)">
-                  <div class="r-week-bar-fill" style="width:${prog.toFixed(1)}%;background:${c}"></div>
-                </div>
-              </div>`;
-          }).join('');
-
-      return `
-        <p class="r-section" style="margin-top:4px">Resumo Geral</p>
-        <div style="background:#1e293b;border-radius:14px;padding:16px;margin-bottom:4px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-            <div>
-              <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px">CMV Mensal Consolidado</div>
-              <div style="font-size:10px;color:#64748b;margin-top:2px">Fat. ${fmtR(totFat)} · Gasto ${fmtR(totGasto)}</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:28px;font-weight:800;color:${col};line-height:1">${realMensal != null ? realMensal.toFixed(1)+'%' : '—'}</div>
-              <div style="font-size:11px;color:#64748b">meta ${metaMensal.toFixed(0)}%</div>
-            </div>
+          <div class="r-weeks">
+            <div class="r-weeks-title">Últimas 4 semanas</div>
+            ${weeksHtml}
           </div>
-          <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Semanal por rede</div>
-          ${weeksHtml}
+          ${linhasHtml}
         </div>`;
     }
 
