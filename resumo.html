@@ -338,57 +338,63 @@
 
     /* ── Card resumo geral ── */
     function summaryCard(allData) {
-      let totFat = 0, totGasto = 0, metaSum = 0, metaCount = 0;
-      const weekTotals = [1,2,3,4].map(w => ({ w, fat: 0, gasto: 0, meta: 0, count: 0 }));
-
+      // Coleta todas as semanas ISO de todas as unidades e pega as últimas 4
+      const weekSet = new Set();
       for (const { data } of allData) {
-        const cmv = data?.cmv || {};
-        for (let w = 1; w <= 4; w++) {
-          const d = cmv['semana_' + w] || {};
-          if (!d.faturamento) continue;
-          const gasto = (d.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
-          totFat   += d.faturamento;
-          totGasto += gasto;
-          metaSum  += d.meta_pct || 30;
-          metaCount++;
-          weekTotals[w-1].fat   += d.faturamento;
-          weekTotals[w-1].gasto += gasto;
-          weekTotals[w-1].meta  += (d.meta_pct || 30);
-          weekTotals[w-1].count++;
-        }
+        Object.keys(data?.cmv || {}).filter(k => k.includes('-W')).forEach(k => weekSet.add(k));
       }
+      const sortedWeeks = Array.from(weekSet).sort().slice(-4);
+
+      let totFat = 0, totGasto = 0, metaSum = 0, metaCount = 0;
+
+      const weekTotals = sortedWeeks.map(wk => {
+        let fat = 0, gasto = 0, metaAcc = 0, count = 0;
+        for (const { data } of allData) {
+          const d = data?.cmv?.[wk] || {};
+          if (!d.faturamento) continue;
+          const g = (d.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
+          fat     += d.faturamento;
+          gasto   += g;
+          metaAcc += (d.meta_pct || 30);
+          count++;
+        }
+        if (fat > 0) { totFat += fat; totGasto += gasto; metaSum += metaAcc / (count || 1); metaCount++; }
+        return { key: wk, label: getWeekLabel(wk), fat, gasto, meta: metaAcc, count };
+      });
 
       const realMensal = totFat > 0 ? (totGasto / totFat) * 100 : null;
       const metaMensal = metaCount > 0 ? metaSum / metaCount : 30;
       const col        = cmvColor(realMensal, metaMensal);
 
-      const weeksHtml = weekTotals.map(wk => {
-        if (wk.fat === 0) return `
-          <div class="r-week-row">
-            <div class="r-week-info">
-              <span class="r-week-name" style="color:#94a3b8">Sem. ${wk.w}</span>
-              <span class="r-week-empty" style="color:#475569">sem dados</span>
-            </div>
-          </div>`;
-        const real = (wk.gasto / wk.fat) * 100;
-        const meta = wk.meta / wk.count;
-        const prog = Math.min(wk.gasto / (wk.fat * meta / 100) * 100, 100);
-        const c    = cmvColor(real, meta);
-        return `
-          <div class="r-week-row">
-            <div class="r-week-info">
-              <span class="r-week-name" style="color:#e2e8f0">Sem. ${wk.w} · ${wk.count} unid.</span>
-              <div class="r-week-stats">
-                <span class="r-week-stat" style="color:#94a3b8">Fat. <strong style="color:#cbd5e1">${fmtR(wk.fat)}</strong></span>
-                <span class="r-week-stat" style="color:#94a3b8">Gasto <strong style="color:#cbd5e1">${fmtR(wk.gasto)}</strong></span>
-                <span class="r-week-stat" style="color:#94a3b8">CMV <strong style="color:${c}">${real.toFixed(1)}%</strong> <span style="color:#475569">/ ${meta.toFixed(0)}%</span></span>
-              </div>
-            </div>
-            <div class="r-week-bar-bg" style="background:rgba(255,255,255,.1)">
-              <div class="r-week-bar-fill" style="width:${prog.toFixed(1)}%;background:${c}"></div>
-            </div>
-          </div>`;
-      }).join('');
+      const weeksHtml = weekTotals.length === 0
+        ? `<div style="color:#475569;font-size:12px;padding:8px 0">Nenhuma semana com dados ainda.</div>`
+        : weekTotals.map(wk => {
+            if (wk.fat === 0) return `
+              <div class="r-week-row">
+                <div class="r-week-info">
+                  <span class="r-week-name" style="color:#94a3b8">${wk.label}</span>
+                  <span class="r-week-empty" style="color:#475569">sem dados</span>
+                </div>
+              </div>`;
+            const real = (wk.gasto / wk.fat) * 100;
+            const meta = wk.meta / wk.count;
+            const prog = Math.min(wk.gasto / (wk.fat * meta / 100) * 100, 100);
+            const c    = cmvColor(real, meta);
+            return `
+              <div class="r-week-row">
+                <div class="r-week-info">
+                  <span class="r-week-name" style="color:#e2e8f0">${wk.label} · ${wk.count} unid.</span>
+                  <div class="r-week-stats">
+                    <span class="r-week-stat" style="color:#94a3b8">Fat. <strong style="color:#cbd5e1">${fmtR(wk.fat)}</strong></span>
+                    <span class="r-week-stat" style="color:#94a3b8">Gasto <strong style="color:#cbd5e1">${fmtR(wk.gasto)}</strong></span>
+                    <span class="r-week-stat" style="color:#94a3b8">CMV <strong style="color:${c}">${real.toFixed(1)}%</strong> <span style="color:#475569">/ ${meta.toFixed(0)}%</span></span>
+                  </div>
+                </div>
+                <div class="r-week-bar-bg" style="background:rgba(255,255,255,.1)">
+                  <div class="r-week-bar-fill" style="width:${prog.toFixed(1)}%;background:${c}"></div>
+                </div>
+              </div>`;
+          }).join('');
 
       return `
         <p class="r-section" style="margin-top:4px">Resumo Geral</p>
@@ -422,7 +428,10 @@
 
     async function render() {
       const allData = await Promise.all(UNITS.map(u => loadUnit(u).then(d => ({ unit: u, data: d }))));
-      document.getElementById('unitsBlock').innerHTML = allData.map(({ unit, data }) => unitCard(unit, data)).join('');
+      const summary   = summaryCard(allData);
+      const unitCards = allData.map(({ unit, data }) => unitCard(unit, data)).join('');
+      document.getElementById('unitsBlock').innerHTML =
+        summary + '<p class="r-section">Unidades</p>' + unitCards;
     }
 
     document.addEventListener('DOMContentLoaded', render);
