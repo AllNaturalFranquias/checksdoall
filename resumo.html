@@ -74,19 +74,48 @@
     .r-weeks { padding: 10px 14px 14px; }
     .r-weeks-title { font-size: 10px; font-weight: 700; color: #64748b;
       text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
-    .r-week-row { margin-bottom: 8px; }
-    .r-week-row:last-child { margin-bottom: 0; }
-    .r-week-info {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 3px;
+    .r-week-table { width: 100%; border-collapse: collapse; }
+    .r-week-table th {
+      font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase;
+      letter-spacing: .5px; text-align: right; padding: 0 6px 6px; white-space: nowrap;
     }
-    .r-week-name { font-size: 11px; font-weight: 600; color: #475569; }
-    .r-week-stats { display: flex; gap: 10px; }
-    .r-week-stat  { font-size: 11px; color: #64748b; }
-    .r-week-stat strong { color: #1e293b; }
-    .r-week-bar-bg { height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
-    .r-week-bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+    .r-week-table th:first-child { text-align: left; padding-left: 0; }
+    .r-week-table td {
+      font-size: 12px; color: #475569; text-align: right; padding: 5px 6px;
+      border-top: 1px solid #f1f5f9; white-space: nowrap;
+    }
+    .r-week-table td:first-child { text-align: left; padding-left: 0; font-weight: 600; color: #334155; font-size: 11px; }
+    .r-week-table td strong { font-weight: 700; color: #1e293b; }
+    .r-week-table td .saldo-pos { color: #16a34a; font-weight: 700; }
+    .r-week-table td .saldo-neg { color: #dc2626; font-weight: 700; }
     .r-week-empty { font-size: 11px; color: #cbd5e1; font-style: italic; }
+    .r-week-bar-bg { height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; margin-top: 3px; }
+    .r-week-bar-fill { height: 100%; border-radius: 2px; transition: width .4s; }
+
+    /* ── Painel rede (consolidado) ── */
+    .r-rede {
+      background: #1e293b; border-radius: 14px; padding: 16px;
+      margin-bottom: 14px;
+    }
+    .r-rede-title { font-size: 10px; font-weight: 700; color: #64748b;
+      text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px; }
+    .r-rede-table { width: 100%; border-collapse: collapse; }
+    .r-rede-table th {
+      font-size: 9px; font-weight: 700; color: #475569; text-transform: uppercase;
+      letter-spacing: .5px; text-align: right; padding: 0 8px 8px; white-space: nowrap;
+    }
+    .r-rede-table th:first-child { text-align: left; padding-left: 0; }
+    .r-rede-table td {
+      font-size: 13px; color: #94a3b8; text-align: right;
+      padding: 6px 8px; border-top: 1px solid rgba(255,255,255,.06); white-space: nowrap;
+    }
+    .r-rede-table td:first-child { text-align: left; padding-left: 0; font-size: 11px; font-weight: 600; color: #64748b; }
+    .r-rede-table .cur-week td { color: #e2e8f0; }
+    .r-rede-table .cur-week td:first-child { color: #fff; }
+    .r-rede-fat  { color: #60a5fa !important; font-weight: 700; }
+    .r-rede-gasto{ color: #f87171 !important; font-weight: 700; }
+    .r-rede-saldo-pos { color: #4ade80 !important; font-weight: 700; }
+    .r-rede-saldo-neg { color: #f87171 !important; font-weight: 700; }
 
     /* ── Datas ── */
     .r-dates {
@@ -119,6 +148,7 @@
   </div>
 
   <main class="r-main">
+    <div id="redeBlock"></div>
     <div id="unitsBlock">
       <p style="color:#94a3b8;text-align:center;padding:32px 0">Carregando...</p>
     </div>
@@ -262,39 +292,40 @@
       const nfCls   = nfDays  == null ? '' : nfDays  > 7  ? 'old'   : 'ok';
       const cntCls  = cntDays == null ? '' : cntDays > 10 ? 'old'   : 'ok';
 
-      const weeksHtml = m.weeks.map(wk => {
-        if (wk.fat === 0 && wk.gasto === 0) return `
-          <div class="r-week-row">
-            <div class="r-week-info">
-              <span class="r-week-name">${wk.label}</span>
-              <span class="r-week-empty">sem lançamentos</span>
-            </div>
-          </div>`;
-        if (wk.fat === 0) return `
-          <div class="r-week-row">
-            <div class="r-week-info">
-              <span class="r-week-name">${wk.label}</span>
-              <div class="r-week-stats">
-                <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
-                <span class="r-week-empty">fat. não configurado</span>
-              </div>
-            </div>
-          </div>`;
-        const col = cmvColor(wk.real, wk.meta);
-        return `
-          <div class="r-week-row">
-            <div class="r-week-info">
-              <span class="r-week-name">${wk.label}</span>
-              <div class="r-week-stats">
-                <span class="r-week-stat">Gasto <strong>${fmtR(wk.gasto)}</strong></span>
-                <span class="r-week-stat">CMV <strong style="color:${col}">${wk.real.toFixed(1)}%</strong><span style="color:#94a3b8"> / ${wk.meta}%</span></span>
-              </div>
-            </div>
-            <div class="r-week-bar-bg">
-              <div class="r-week-bar-fill" style="width:${wk.prog.toFixed(1)}%;background:${col}"></div>
-            </div>
-          </div>`;
-      }).join('');
+      const weeksHtml = `
+        <table class="r-week-table">
+          <thead><tr>
+            <th>Semana</th>
+            <th>Faturamento</th>
+            <th>Gasto</th>
+            <th>Saldo</th>
+            <th>CMV</th>
+          </tr></thead>
+          <tbody>
+          ${m.weeks.map(wk => {
+            if (wk.fat === 0 && wk.gasto === 0) return `
+              <tr>
+                <td>${wk.label}</td>
+                <td colspan="4" style="color:#cbd5e1;font-style:italic;font-size:11px">sem lançamentos</td>
+              </tr>`;
+            const saldo = wk.fat - wk.gasto;
+            const saldoCls = saldo >= 0 ? 'saldo-pos' : 'saldo-neg';
+            const col = cmvColor(wk.real, wk.meta);
+            const cmvTxt = wk.real != null
+              ? `<strong style="color:${col}">${wk.real.toFixed(1)}%</strong>`
+              : `<span style="color:#cbd5e1">—</span>`;
+            return `
+              <tr>
+                <td>${wk.label}</td>
+                <td><strong>${fmtR(wk.fat) !== '—' ? fmtR(wk.fat) : '<span style="color:#cbd5e1">—</span>'}</strong></td>
+                <td><strong>${fmtR(wk.gasto)}</strong></td>
+                <td><span class="${wk.fat > 0 ? saldoCls : ''}">${wk.fat > 0 ? fmtR(saldo) : '—'}</span></td>
+                <td>${cmvTxt}</td>
+              </tr>
+              <tr><td colspan="5" style="padding:0 0 2px"><div class="r-week-bar-bg"><div class="r-week-bar-fill" style="width:${wk.prog.toFixed(1)}%;background:${col}"></div></div></td></tr>`;
+          }).join('')}
+          </tbody>
+        </table>`;
 
       const linhasHtml = m.topLinhas.length > 0 ? `
         <div style="padding:8px 14px 12px;border-top:1px solid #f1f5f9">
@@ -332,6 +363,50 @@
         </div>`;
     }
 
+    /* ── Painel consolidado da rede ── */
+    function redePanel(allData) {
+      const weeks = last4Weeks();
+      const curKey = weeks[weeks.length - 1];
+
+      const rows = weeks.map(key => {
+        let fat = 0, gasto = 0, unitsWithFat = 0;
+        for (const { data } of allData) {
+          if (!data) continue;
+          const d = data.cmv?.[key] || {};
+          if (d.faturamento > 0) { fat += d.faturamento; unitsWithFat++; }
+          gasto += (d.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
+        }
+        const saldo = fat - gasto;
+        const cmv   = fat > 0 ? (gasto / fat) * 100 : null;
+        const col   = cmvColor(cmv, 30);
+        const isCur = key === curKey;
+        const saldoCls = saldo >= 0 ? 'r-rede-saldo-pos' : 'r-rede-saldo-neg';
+        return `
+          <tr class="${isCur ? 'cur-week' : ''}">
+            <td>${getWeekLabel(key)}</td>
+            <td class="r-rede-fat">${fat > 0 ? fmtR(fat) : '—'}</td>
+            <td class="r-rede-gasto">${gasto > 0 ? fmtR(gasto) : '—'}</td>
+            <td class="${fat > 0 ? saldoCls : ''}">${fat > 0 ? fmtR(saldo) : '—'}</td>
+            <td style="color:${cmv != null ? col : '#475569'};font-weight:700">${cmv != null ? cmv.toFixed(1) + '%' : '—'}</td>
+          </tr>`;
+      }).join('');
+
+      return `
+        <div class="r-rede">
+          <div class="r-rede-title" style="color:#94a3b8">Rede · Evolução semanal</div>
+          <table class="r-rede-table">
+            <thead><tr>
+              <th>Semana</th>
+              <th>Faturamento</th>
+              <th>Gasto</th>
+              <th>Saldo</th>
+              <th>CMV</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
     /* ── Render ── */
     async function loadUnit(unit) {
       try {
@@ -346,8 +421,8 @@
 
     async function render() {
       const allData = await Promise.all(UNITS.map(u => loadUnit(u).then(d => ({ unit: u, data: d }))));
-      document.getElementById('unitsBlock').innerHTML =
-        allData.map(({ unit, data }) => unitCard(unit, data)).join('');
+      document.getElementById('redeBlock').innerHTML  = redePanel(allData);
+      document.getElementById('unitsBlock').innerHTML = allData.map(({ unit, data }) => unitCard(unit, data)).join('');
     }
 
     document.addEventListener('DOMContentLoaded', render);
