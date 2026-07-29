@@ -45,11 +45,18 @@ const CLOUD_CFG   = 'config_' + UNIT_ID;
 // ── Sessão de admin (setada pelo login) ───────────────────────
 let _session = null;
 try { _session = JSON.parse(sessionStorage.getItem('inv_session') || 'null'); } catch(e) {}
-const IS_ADMIN = Boolean(_session && _session.isAdmin && (_session.unidade === UNIT_ID || _session.isGlobal));
+const IS_ADMIN = Boolean(_session && _session.isAdmin && (
+  _session.unidade === UNIT_ID ||
+  _session.isGlobal ||
+  (_session.units && _session.units.includes(UNIT_ID))
+));
 
 // ── PINs de admin por unidade ─────────────────────────────────
 let UNIT_ADMINS = {
-  global:       [{ nome: 'Kauê',    pin: '1234' }],
+  global: [
+    { nome: 'Kauê',        pin: '1234' },
+    { nome: 'Supervisora', pin: '3333', units: ['bigorrilho', 'parkshopping'] },
+  ],
   batel:        [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
   maringa:      [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
   parkshopping: [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
@@ -1367,7 +1374,8 @@ function checkPin() {
     const matchedAdmin = globalMatch || unitMatch;
     const session = {
       isAdmin:  true,
-      isGlobal: Boolean(globalMatch),
+      isGlobal: Boolean(globalMatch && !globalMatch.units),
+      units:    globalMatch?.units || null,
       unidade:  UNIT_ID,
       nome:     matchedAdmin.nome,
     };
