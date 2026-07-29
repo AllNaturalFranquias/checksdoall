@@ -831,7 +831,7 @@ function loadState() {
 
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(doSave, 300);
+  saveTimer = setTimeout(doSaveNow, 300);
 }
 
 function doSave() {
