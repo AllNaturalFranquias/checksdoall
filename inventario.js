@@ -840,7 +840,18 @@ function doSave() {
     localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
     updateSavedLabel();
     showToast('Salvo ✓');
-    scheduleCloudSync(); // sincroniza com a nuvem após salvar
+    scheduleCloudSync();
+  } catch (e) { /* ignore */ }
+}
+
+function doSaveNow() {
+  state.lastSaved = new Date().toISOString();
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
+    updateSavedLabel();
+    showToast('Salvo ✓');
+    clearTimeout(cloudSyncTimer);
+    syncToCloud();
   } catch (e) { /* ignore */ }
 }
 
@@ -1728,7 +1739,7 @@ function saveNota() {
     ts: Date.now()
   });
   closeAddNota();
-  doSave();
+  doSaveNow();
   renderCMVPanel();
   renderNotasPanel();
 }
@@ -1777,7 +1788,7 @@ function saveEditNota() {
 
   learnFornecedorLinha(fornecedor, linha);
   closeEditNota();
-  doSave();
+  doSaveNow();
   renderCMVPanel();
   renderNotasPanel();
   showToast('Nota atualizada ✓');
@@ -1791,7 +1802,7 @@ function deleteNota(id) {
   if (!confirm('Remover esta nota?')) return;
   const d = getCMVData();
   d.notas = (d.notas || []).filter(n => n.id !== id);
-  doSave();
+  doSaveNow();
   renderCMVPanel();
   renderNotasPanel();
 }
@@ -2724,7 +2735,7 @@ async function confirmNFItems() {
   }
 
   saveMapeamentos();
-  doSave();
+  doSaveNow();
   closeNFReview();
   renderCMVPanel();
   renderNotasPanel();
@@ -2853,7 +2864,7 @@ function quickReassignLinha(notaId, novaLinha) {
   nota.linha = novaLinha;
   delete nota.linhas;
   learnFornecedorLinha(nota.fornecedor, novaLinha);
-  doSave();
+  doSaveNow();
   renderCMVPanel();
   showToast('Linha atualizada ✓');
 }
@@ -3509,7 +3520,7 @@ function saveNotaDetailSplit() {
   }
 
   if (_notaDetailFornecedor.trim()) learnFornecedorLinha(_notaDetailFornecedor.trim(), nota.linha || '');
-  scheduleSave();
+  doSaveNow();
   renderCMVPanel();
   renderNotasPanel();
   closeNotaDetail();
@@ -3931,7 +3942,7 @@ function saveLinhasEditNota() {
     nota.linha  = '';
   }
 
-  doSave();
+  doSaveNow();
   renderCMVPanel();
   showToast('Nota atualizada ✓');
   linhasGoBack();
@@ -3941,7 +3952,7 @@ function deleteLinhasNota() {
   if (!confirm('Excluir esta nota?')) return;
   const d = getCMVData(linhasWeekKey);
   d.notas = (d.notas || []).filter(n => n.id !== linhasActiveNotaId);
-  doSave();
+  doSaveNow();
   renderCMVPanel();
   showToast('Nota excluída');
   linhasGoBack();
@@ -4174,7 +4185,7 @@ function saveSplitNota() {
   delete nota.linha; // remove campo antigo
   // Aprende mapeamento fornecedor → primeira linha
   learnFornecedorLinha(nota.fornecedor, rows[0].linha);
-  doSave();
+  doSaveNow();
   renderCMVPanel();
   closeSplitNota();
   showToast('Nota dividida ✓');
@@ -4821,3 +4832,20 @@ function renderDRE() {
 
 // ── Start ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
+
+// Garante sync imediato ao sair da página (fecha aba, navega p/ outra tela, etc.)
+function flushPendingSync() {
+  if (!cloudSyncTimer) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = null;
+  if (!SUPABASE_CONFIGURED) return;
+  // keepalive: true garante que o fetch completa mesmo com a aba fechando
+  fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+    method: 'POST',
+    headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+    body: JSON.stringify({ chave: CLOUD_DADOS, estado: state, atualizado_em: new Date().toISOString() }),
+    keepalive: true
+  }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPendingSync(); });
+window.addEventListener('pagehide', flushPendingSync);
