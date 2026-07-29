@@ -1,0 +1,44 @@
+name: Fatura Pedidos Fábrica
+
+on:
+  schedule:
+    # Dias 1, 11 e 21 de cada mês às 08:00 BRT (11:00 UTC)
+    - cron: '0 11 1,11,21 * *'
+  workflow_dispatch:
+    inputs:
+      dezena:
+        description: 'Dezena (1, 2 ou 3) — deixe vazio para auto-detectar pelo dia'
+        required: false
+        default: ''
+      mes_ano:
+        description: 'Mês/Ano formato YYYY-MM (ex: 2026-07) — obrigatório se dezena informada'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Teste sem enviar email (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  enviar-faturas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: npm install nodemailer
+
+      - name: Gerar e enviar faturas por loja
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GMAIL_USER:   ${{ secrets.GMAIL_USER }}
+          GMAIL_PASS:   ${{ secrets.GMAIL_PASS }}
+          DEZENA:       ${{ inputs.dezena }}
+          MES_ANO:      ${{ inputs.mes_ano }}
+          DRY_RUN:      ${{ inputs.dry_run || 'false' }}
+        run: node scripts/fatura-fabrica.mjs
