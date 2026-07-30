@@ -147,25 +147,35 @@
         <div class="nf-spinner"></div>
         <p style="margin-top:14px;color:#666;font-size:13px">Lendo a nota com IA...</p>
       </div>
-      <div id="nfReviewContent" style="display:none;display:flex;flex-direction:column;min-height:0;flex:1">
-        <!-- Header fixo: fornecedor / linha / data -->
-        <div class="nf-review-hdr">
-          <div class="nota-field">
-            <label>Fornecedor</label>
-            <input id="nfRevFornecedor" type="text" placeholder="Nome do fornecedor" autocomplete="off"
-                   oninput="autoFillLinha('nfRevLinha', this.value)">
-          </div>
-          <div class="nota-field">
-            <label>Linha de produto</label>
-            <select id="nfRevLinha" class="inv-select-linha"></select>
-          </div>
-          <div class="nota-field nf-data-field">
-            <label>Data da NF <span class="nf-data-warn" id="nfDataWarn"></span></label>
-            <input id="nfRevData" type="date" onchange="checkNFDate(this.value)">
-            <span class="nf-data-hint" id="nfDataHint"></span>
-          </div>
+      <!-- Passo 1: Cabeçalho da NF -->
+      <div id="nfStep1" style="display:none;flex-direction:column">
+        <h2 style="text-align:center;margin-bottom:4px">Nota Fiscal</h2>
+        <p style="text-align:center;font-size:12px;color:#94a3b8;margin-bottom:14px">Passo 1 de 2 — Dados gerais</p>
+        <div class="nota-field">
+          <label>Fornecedor</label>
+          <input id="nfRevFornecedor" type="text" placeholder="Nome do fornecedor" autocomplete="off"
+                 oninput="autoFillLinha('nfRevLinha', this.value)">
         </div>
-        <!-- Área de itens: search sticky + lista scrollável -->
+        <div class="nota-field">
+          <label>Linha de produto</label>
+          <select id="nfRevLinha" class="inv-select-linha"></select>
+        </div>
+        <div class="nota-field nf-data-field">
+          <label>Data da NF <span class="nf-data-warn" id="nfDataWarn"></span></label>
+          <input id="nfRevData" type="date" onchange="checkNFDate(this.value)">
+          <span class="nf-data-hint" id="nfDataHint"></span>
+        </div>
+        <button class="inv-modal-btn" onclick="nfGoToStep2()">Próximo →</button>
+        <button class="inv-modal-cancel" onclick="closeNFReview()">Cancelar</button>
+      </div>
+
+      <!-- Passo 2: Itens da NF -->
+      <div id="nfStep2" style="display:none;flex-direction:column;flex:1;min-height:0">
+        <div class="nf-step2-bar">
+          <button class="nf-back-btn" onclick="nfGoToStep1()">← Voltar</button>
+          <span class="nf-step2-title" id="nfStep2Title"></span>
+          <span style="width:60px"></span>
+        </div>
         <div class="nf-review-body">
           <div class="nf-search-sticky">
             <p class="nf-items-label">Itens encontrados — vincule ao inventário</p>
@@ -178,12 +188,10 @@
           </div>
           <div class="nf-items-list" id="nfItemsList"></div>
         </div>
-        <!-- Rodapé fixo: ações -->
         <div class="nf-review-ftr">
           <button class="nf-add-item-btn" onclick="addNFManualItem()">+ Adicionar item</button>
           <div class="nf-total">Total incluído: <strong id="nfTotalConfirmado">R$ 0,00</strong></div>
           <button class="inv-modal-btn" onclick="confirmNFItems()">✓ Confirmar e Salvar</button>
-          <button class="inv-modal-cancel" onclick="closeNFReview()">Cancelar</button>
         </div>
       </div>
     </div>
