@@ -1243,6 +1243,21 @@ body {
 .nf-review-body { flex: 1; overflow-y: auto; min-height: 0; padding: 0 2px; }
 .nf-review-ftr  { flex-shrink: 0; border-top: 1px solid #f0f0f0; padding-top: 8px; margin-top: 4px; }
 
+.nf-step2-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0; padding: 8px 0 10px;
+  border-bottom: 1px solid #f0f0f0; margin-bottom: 4px;
+}
+.nf-step2-title {
+  font-size: 13px; font-weight: 700; color: #1e293b;
+  text-align: center; flex: 1; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; padding: 0 8px;
+}
+.nf-back-btn {
+  background: none; border: none; font-size: 13px; font-weight: 600;
+  color: #E87820; cursor: pointer; padding: 4px 0; width: 60px; text-align: left;
+}
+
 /* Busca sticky dentro da área de itens */
 .nf-search-sticky {
   position: sticky;
