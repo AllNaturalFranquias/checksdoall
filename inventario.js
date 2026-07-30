@@ -2313,9 +2313,9 @@ function findBestMatch(description) {
 }
 
 function openNFManual() {
+  document.getElementById('nfReviewLoading').style.display = 'none';
+  document.getElementById('invNFReviewOverlay').classList.add('open');
   showNFReview({ fornecedor: '', data: '', itens: [] });
-  // Adiciona uma linha em branco para começar
-  addNFManualItem();
 }
 
 function addNFManualItem() {
@@ -2375,9 +2375,8 @@ function checkNFDate(val, ocrFailed) {
 
 function showNFReview(geminiData) {
   document.getElementById('nfReviewLoading').style.display = 'none';
-  document.getElementById('nfReviewContent').style.display = 'flex';
-  const srch = document.getElementById('nfItemSearch');
-  if (srch) srch.value = '';
+  document.getElementById('nfStep1').style.display = 'flex';
+  document.getElementById('nfStep2').style.display = 'none';
 
   const fornEl = document.getElementById('nfRevFornecedor');
   const dataEl = document.getElementById('nfRevData');
@@ -2400,8 +2399,22 @@ function showNFReview(geminiData) {
     incluir:        true,
     linha:          ''
   }));
+}
 
+function nfGoToStep2() {
+  const srch = document.getElementById('nfItemSearch');
+  if (srch) srch.value = '';
+  const forn = (document.getElementById('nfRevFornecedor').value || '').trim();
+  const titleEl = document.getElementById('nfStep2Title');
+  if (titleEl) titleEl.textContent = forn || 'Itens da NF';
+  document.getElementById('nfStep1').style.display = 'none';
+  document.getElementById('nfStep2').style.display = 'flex';
   renderNFItems();
+}
+
+function nfGoToStep1() {
+  document.getElementById('nfStep2').style.display = 'none';
+  document.getElementById('nfStep1').style.display = 'flex';
 }
 
 // Cache dos itens do inventário para o combo da NF
@@ -2664,6 +2677,8 @@ function updateNFTotal() {
 
 function closeNFReview() {
   document.getElementById('invNFReviewOverlay').classList.remove('open');
+  document.getElementById('nfStep1').style.display = 'none';
+  document.getElementById('nfStep2').style.display = 'none';
   nfExtractedItems = [];
 }
 
