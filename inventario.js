@@ -2146,7 +2146,8 @@ async function handleNFPhoto(input) {
   input.value = '';
 
   document.getElementById('nfReviewLoading').style.display = 'block';
-  document.getElementById('nfReviewContent').style.display = 'none';
+  document.getElementById('nfStep1').style.display = 'none';
+  document.getElementById('nfStep2').style.display = 'none';
   document.getElementById('invNFReviewOverlay').classList.add('open');
 
   if (!getGeminiKey()) {
