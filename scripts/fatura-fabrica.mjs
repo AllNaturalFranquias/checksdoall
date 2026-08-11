@@ -4,7 +4,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const GMAIL_USER   = process.env.GMAIL_USER;
 const GMAIL_PASS   = process.env.GMAIL_PASS;
-const REPORT_EMAIL = 'kaue.drabik@gmail.com';
+const REPORT_EMAIL = 'allnatural.cwb@gmail.com';
 const DRY_RUN      = process.env.DRY_RUN === 'true';
 
 const MESES    = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
