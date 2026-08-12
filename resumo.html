@@ -91,6 +91,10 @@
     .r-week-empty { font-size: 11px; color: #cbd5e1; font-style: italic; }
     .r-week-bar-bg { height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; margin-top: 3px; }
     .r-week-bar-fill { height: 100%; border-radius: 2px; transition: width .4s; }
+    .r-week-table .meta-pct { font-size: 10px; color: #94a3b8; display: block; margin-top: 1px; }
+    .r-week-table .exc-pos { color: #dc2626; font-weight: 700; }
+    .r-week-table .exc-neg { color: #16a34a; font-weight: 700; }
+    .r-week-table .exc-zero { color: #94a3b8; }
 
 
     /* ── Datas ── */
@@ -221,9 +225,11 @@
         const meta  = d.meta_pct || 30;
         const notas = d.notas || [];
         const gasto = notas.reduce((s, n) => s + (n.valor || 0), 0);
-        const real  = fat > 0 ? (gasto / fat) * 100 : null;
-        const prog  = fat > 0 ? Math.min(gasto / (fat * meta / 100) * 100, 100) : 0;
-        return { key, label: getWeekLabel(key), fat, meta, gasto, real, prog, notas };
+        const metaR  = fat > 0 ? (fat * meta / 100) : 0;
+        const real   = fat > 0 ? (gasto / fat) * 100 : null;
+        const exc    = fat > 0 ? gasto - metaR : null;
+        const prog   = metaR > 0 ? Math.min(gasto / metaR * 100, 100) : 0;
+        return { key, label: getWeekLabel(key), fat, meta, metaR, gasto, real, exc, prog, notas };
       });
 
       // Última NF — usa n.ts (momento do lançamento no app), não a data da nota
@@ -272,9 +278,9 @@
           <thead><tr>
             <th>Semana</th>
             <th>Faturamento</th>
+            <th>Meta CMV</th>
             <th>Gasto</th>
-            <th>Saldo</th>
-            <th>CMV</th>
+            <th>Excedido</th>
           </tr></thead>
           <tbody>
           ${m.weeks.map(wk => {
@@ -283,19 +289,27 @@
                 <td>${wk.label}</td>
                 <td colspan="4" style="color:#cbd5e1;font-style:italic;font-size:11px">sem lançamentos</td>
               </tr>`;
-            const saldo = wk.fat - wk.gasto;
-            const saldoCls = saldo >= 0 ? 'saldo-pos' : 'saldo-neg';
             const col = cmvColor(wk.real, wk.meta);
-            const cmvTxt = wk.real != null
-              ? `<strong style="color:${col}">${wk.real.toFixed(1)}%</strong>`
+            const metaCell = wk.fat > 0
+              ? `<strong>${fmtR(wk.metaR)}</strong><span class="meta-pct">${wk.meta.toFixed(1)}%</span>`
               : `<span style="color:#cbd5e1">—</span>`;
+            let excCell = '<span class="exc-zero">—</span>';
+            if (wk.exc != null) {
+              if (wk.exc > 0) {
+                excCell = `<span class="exc-pos">+${fmtR(wk.exc)}</span>`;
+              } else if (wk.exc < 0) {
+                excCell = `<span class="exc-neg">${fmtR(wk.exc)}</span>`;
+              } else {
+                excCell = `<span class="exc-zero">${fmtR(0)}</span>`;
+              }
+            }
             return `
               <tr>
                 <td>${wk.label}</td>
-                <td><strong>${fmtR(wk.fat) !== '—' ? fmtR(wk.fat) : '<span style="color:#cbd5e1">—</span>'}</strong></td>
-                <td><strong>${fmtR(wk.gasto)}</strong></td>
-                <td><span class="${wk.fat > 0 ? saldoCls : ''}">${wk.fat > 0 ? fmtR(saldo) : '—'}</span></td>
-                <td>${cmvTxt}</td>
+                <td><strong>${wk.fat > 0 ? fmtR(wk.fat) : '<span style="color:#cbd5e1">—</span>'}</strong></td>
+                <td>${metaCell}</td>
+                <td><strong style="color:${col}">${fmtR(wk.gasto)}</strong></td>
+                <td>${excCell}</td>
               </tr>
               <tr><td colspan="5" style="padding:0 0 2px"><div class="r-week-bar-bg"><div class="r-week-bar-fill" style="width:${wk.prog.toFixed(1)}%;background:${col}"></div></div></td></tr>`;
           }).join('')}
