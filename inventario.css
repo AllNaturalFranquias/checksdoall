@@ -3124,6 +3124,16 @@ body { padding-bottom: 62px; }
 }
 .cmv-nota-add-boleto:hover { background: #f3f4f6; border-color: #d1d5db; }
 
+/* Linha hint — sugestão de linha de produto */
+.linha-hint { display:block; margin-top:5px; min-height:0; font-size:12px; line-height:1.5; }
+.linha-hint .linha-quick-btn {
+  display:inline-block; margin:2px 4px 2px 0;
+  padding:3px 10px; background:#fff7ed; border:1px solid #fed7aa;
+  border-radius:6px; font-size:11px; font-weight:600; color:#92400e;
+  cursor:pointer; font-family:inherit;
+}
+.linha-quick-btn:hover { background:#ffedd5; }
+
 /* Botões do overlay de boleto (fundo claro) */
 .boleto-btn {
   display: flex; align-items: center; justify-content: center; gap: 10px;
