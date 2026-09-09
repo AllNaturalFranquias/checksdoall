@@ -377,6 +377,42 @@ body {
   border-color: var(--primary);
 }
 
+/* Campos bloqueados: Inicial e Entradas (só Final é editável) */
+.inv-field-locked input {
+  background: #f5f5f5;
+  color: #aaa;
+  border-color: #e8e8e8;
+  cursor: default;
+  pointer-events: none;
+}
+.inv-field-locked label {
+  color: #c0c0c0;
+}
+.inv-field-locked.entrada input {
+  background: #eff3ff;
+  border-color: #c5d0f5;
+  color: #9aabdb;
+  pointer-events: none;
+}
+.inv-field-locked.entrada label {
+  color: #9aabdb;
+}
+.inv-lock-badge {
+  font-size: 9px;
+  font-weight: 500;
+  color: #c0c0c0;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 2px;
+}
+.inv-entry-unlock {
+  background: none; border: none;
+  font-size: 10px; cursor: pointer;
+  color: var(--primary); padding: 0 2px;
+  vertical-align: middle; opacity: 0.7;
+}
+.inv-entry-unlock:hover { opacity: 1; }
+
 .inv-consumo {
   margin-top: 10px;
   display: flex;
@@ -2338,6 +2374,32 @@ body { padding-bottom: 62px; }
 .comp-table td { padding: 8px 8px; border-bottom: 1px solid #f9fafb; color: #374151; }
 .comp-table tr:last-child td { border-bottom: none; }
 
+/* Economizou/Excedeu na tabela CMV */
+.comp-econ-pos { color: #16a34a; font-weight: 700; }
+.comp-econ-neg { color: #ef4444; font-weight: 700; }
+.comp-econ-zero { color: #9ca3af; font-weight: 400; }
+
+/* Resumo mensal */
+.comp-month-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.comp-month-row {
+  display: flex; align-items: center; gap: 8px;
+  background: #f9fafb; border-radius: 10px; padding: 12px 14px;
+}
+.comp-month-name { font-weight: 700; font-size: 13px; flex: 1; text-transform: capitalize; }
+.comp-month-fat  { font-size: 12px; color: #6b7280; white-space: nowrap; }
+.comp-month-econ { font-size: 14px; font-weight: 800; min-width: 100px; text-align: right; white-space: nowrap; }
+
+/* Relatorio: ranking de consumos */
+.relat-rank-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid #f3f4f6;
+}
+.relat-rank-row:last-child { border-bottom: none; }
+.relat-rank-num  { font-size: 11px; color: #9ca3af; font-weight: 700; min-width: 18px; }
+.relat-rank-nome { flex: 1; font-size: 13px; font-weight: 600; }
+.relat-rank-sect { font-size: 10px; color: #9ca3af; }
+.relat-rank-val  { font-weight: 700; font-size: 13px; color: var(--primary); white-space: nowrap; }
+
 /* Preços monitorados */
 .comp-precos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 .comp-preco-card {
@@ -2931,6 +2993,113 @@ body { padding-bottom: 62px; }
   font-family: inherit; margin-top: 8px; width: 100%;
 }
 
+/* ── Cruzamento Fichas × Vendas overlay ─────────────────── */
+.crz-overlay { align-items: flex-start !important; padding: 0; }
+.crz-modal {
+  background: #fff;
+  width: 100%; max-width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.crz-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; background: var(--dark); color: #fff;
+  flex-shrink: 0;
+}
+.crz-title { font-size: 15px; font-weight: 700; }
+.crz-close-btn {
+  background: rgba(255,255,255,.15); border: none; color: #fff;
+  width: 32px; height: 32px; border-radius: 8px; font-size: 16px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.crz-steps { flex: 1; overflow-y: auto; padding: 16px; }
+
+/* Step 1: upload */
+.crz-drop {
+  border: 2.5px dashed var(--border); border-radius: 14px;
+  padding: 48px 20px; text-align: center; cursor: pointer;
+  background: #fafafa; transition: all .2s;
+}
+.crz-drop:hover, .crz-drop.drag-over { border-color: var(--primary); background: #fff8f2; }
+.crz-drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
+.crz-drop-title { font-size: 1rem; font-weight: 700; color: var(--primary); margin-bottom: 6px; }
+.crz-drop-sub { font-size: .83rem; color: var(--muted); }
+.crz-or { text-align: center; color: var(--muted); font-size: .8rem; margin: 12px 0; }
+.crz-btn-alt {
+  display: block; margin: 0 auto; background: none;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 10px 20px; font-size: .85rem; font-weight: 600;
+  color: var(--muted); cursor: pointer; font-family: inherit;
+}
+.crz-btn-alt:hover { border-color: var(--primary); color: var(--primary); }
+
+/* Col picker */
+.crz-col-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.crz-col-field { flex: 1; min-width: 140px; }
+.crz-col-field label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; display: block; margin-bottom: 4px; }
+.crz-col-field select {
+  width: 100%; padding: 8px 10px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: inherit; font-size: 13px;
+  background: #fff; color: var(--text);
+}
+.crz-preview-table { width: 100%; border-collapse: collapse; font-size: 12px; overflow-x: auto; }
+.crz-preview-table th { background: #f5f5f5; padding: 6px 8px; text-align: left; font-size: 10px; color: var(--muted); }
+.crz-preview-table td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; }
+
+/* Step 3: mapping */
+.crz-map-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.crz-map-row:last-child { border-bottom: none; }
+.crz-map-produto { flex: 1; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crz-map-qtd { font-size: 12px; color: var(--muted); min-width: 50px; text-align: right; }
+.crz-map-select {
+  width: 180px; padding: 6px 8px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: inherit; font-size: 11px;
+  background: #fff; color: var(--text); flex-shrink: 0;
+}
+.crz-map-select.mapped { border-color: var(--green); background: #f0faf5; }
+
+/* Step 4: results */
+.crz-result-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.crz-result-table th {
+  text-align: left; padding: 6px 8px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; color: var(--muted); border-bottom: 1.5px solid #f3f4f6;
+}
+.crz-result-table td { padding: 8px 8px; border-bottom: 1px solid #f9fafb; }
+.crz-result-table tr:last-child td { border-bottom: none; }
+.crz-diff-pos { color: #ef4444; font-weight: 700; }
+.crz-diff-neg { color: #16a34a; font-weight: 700; }
+.crz-diff-ok  { color: #9ca3af; }
+
+/* Common */
+.crz-section-title {
+  font-size: 13px; font-weight: 800; color: var(--text);
+  margin: 16px 0 8px; display: flex; align-items: center; gap: 6px;
+}
+.crz-card { background: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 12px; }
+.crz-btn {
+  background: var(--primary); color: #fff; border: none;
+  padding: 12px 24px; border-radius: 8px; font-size: .9rem;
+  font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 12px;
+}
+.crz-btn:hover { opacity: .88; }
+.crz-btn:disabled { opacity: .45; cursor: not-allowed; }
+.crz-btn-sec {
+  background: none; color: var(--primary); border: 1.5px solid var(--primary);
+  padding: 11px 20px; border-radius: 8px; font-size: .85rem;
+  font-weight: 600; cursor: pointer; font-family: inherit; margin-top: 12px;
+}
+.crz-info { font-size: .82rem; color: var(--muted); margin-top: 8px; }
+.crz-summary-bar {
+  display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.crz-summary-chip {
+  background: #f5f5f5; border-radius: 8px; padding: 8px 14px;
+  font-size: 12px; font-weight: 600; color: var(--text);
+}
+
 /* Layout responsivo: mobile estreito, desktop largo */
 @media (max-width: 600px) {
   .app-bottom-nav { max-width: 100%; left: 0; transform: none; }
@@ -2939,3 +3108,18 @@ body { padding-bottom: 62px; }
   main.inv-sections { max-width: 960px; margin: 0 auto; }
   .inv-header-inner { max-width: 960px; margin: 0 auto; }
 }
+
+/* Boleto badges nas notas */
+.cmv-nota-boleto-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 600; color: #16a34a;
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+  border-radius: 6px; padding: 2px 7px; cursor: pointer;
+}
+.cmv-nota-add-boleto {
+  display: inline-flex; align-items: center;
+  font-size: 11px; font-weight: 600; color: #6b7280;
+  background: #f9fafb; border: 1px solid #e5e7eb;
+  border-radius: 6px; padding: 2px 7px; cursor: pointer; font-family: inherit;
+}
+.cmv-nota-add-boleto:hover { background: #f3f4f6; border-color: #d1d5db; }
