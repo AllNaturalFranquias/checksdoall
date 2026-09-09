@@ -2726,11 +2726,12 @@ async function confirmNFItems() {
     linhaMap[l] = (linhaMap[l] || 0) + (item.preco_total || 0);
   }
   const linhaEntries = Object.entries(linhaMap);
-  const linhaFields = linhaEntries.length === 1
-    ? { linha: linhaEntries[0][0] }
-    : { linhas: linhaEntries.map(([l, v]) => ({ linha: l, valor: +v.toFixed(2) })), linha: linhaEntries[0][0] };
+  const firstLinha = linhaEntries.length > 0 ? linhaEntries[0][0] : defaultLinha;
+  const linhaFields = linhaEntries.length <= 1
+    ? { linha: firstLinha }
+    : { linhas: linhaEntries.map(([l, v]) => ({ linha: l, valor: +v.toFixed(2) })), linha: firstLinha };
 
-  learnFornecedorLinha(fornecedor, linhaEntries[0][0]);
+  learnFornecedorLinha(fornecedor, firstLinha);
   const itensResumo = included.map(i => ({
     nome: i.nome || i.descricao || '',
     quantidade: i.quantidade || 1,
