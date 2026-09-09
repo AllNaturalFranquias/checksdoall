@@ -1745,9 +1745,15 @@ function saveNota() {
   const data       = document.getElementById('notaData').value;
   const linha      = document.getElementById('notaLinha')?.value || 'Outros';
 
-  if (!fornecedor || isNaN(valor) || valor <= 0) {
+  if (!fornecedor || isNaN(valor) || valor <= 0 || !linha) {
     document.getElementById('notaFornecedor').classList.toggle('error', !fornecedor);
     document.getElementById('notaValor').classList.toggle('error', isNaN(valor) || valor <= 0);
+    if (!linha) {
+      const linhaEl = document.getElementById('notaLinha');
+      if (linhaEl) { linhaEl.style.outline = '2px solid #f59e0b'; setTimeout(() => linhaEl.style.outline='', 2000); }
+      const hint = document.getElementById('notaLinhaHint');
+      if (hint) hint.innerHTML = '<span style="color:#d97706">⚠ Selecione a linha do produto</span>';
+    }
     return;
   }
 
@@ -2427,6 +2433,15 @@ function showNFReview(geminiData) {
 }
 
 function nfGoToStep2() {
+  const linhaEl = document.getElementById('nfRevLinha');
+  if (linhaEl && !linhaEl.value) {
+    linhaEl.style.outline = '2px solid #f59e0b';
+    const hint = document.getElementById('nfRevLinhaHint');
+    if (hint) hint.innerHTML = '<span style="color:#d97706">⚠ Selecione a linha antes de continuar</span>';
+    linhaEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => { linhaEl.style.outline = ''; }, 2000);
+    return;
+  }
   const srch = document.getElementById('nfItemSearch');
   if (srch) srch.value = '';
   const forn = (document.getElementById('nfRevFornecedor').value || '').trim();
@@ -3696,28 +3711,51 @@ function normalizeForn(s) {
 }
 
 function autoFillLinha(selectId, fornecedor) {
-  const sel = document.getElementById(selectId);
-  if (!sel || !fornecedor.trim()) return;
-  const norm = normalizeForn(fornecedor);
-  const known = linhasConfig.fornecedores || {};
+  const sel  = document.getElementById(selectId);
+  const hint = document.getElementById(selectId + 'Hint');
+  if (!sel) return;
+  if (hint) hint.innerHTML = '';
+  if (!fornecedor.trim()) return;
 
-  // Busca exata primeiro
-  let linha = known[norm];
+  const norm     = normalizeForn(fornecedor);
+  const known    = linhasConfig.fornecedores      || {};
+  const allMap   = linhasConfig.fornecedoresLinhas || {};
 
-  // Busca substring se não achou
-  if (!linha) {
-    for (const [key, val] of Object.entries(known)) {
-      if (norm.includes(key) || key.includes(norm)) { linha = val; break; }
+  // Busca exata, depois substring
+  let matchKey = known[norm] ? norm : null;
+  if (!matchKey) {
+    for (const key of Object.keys(known)) {
+      if (norm.includes(key) || key.includes(norm)) { matchKey = key; break; }
     }
   }
+  if (!matchKey) return;
 
-  if (linha && linhasConfig.linhas.includes(linha)) sel.value = linha;
+  const validLinhas = (allMap[matchKey] || [known[matchKey]]).filter(l => linhasConfig.linhas.includes(l));
+
+  if (validLinhas.length === 1) {
+    // Fornecedor tem só uma linha → auto-preenche
+    sel.value = validLinhas[0];
+    if (hint) hint.innerHTML = `<span style="color:#16a34a">✓ Sugerido pelo histórico</span>`;
+  } else if (validLinhas.length > 1) {
+    // Multi-linha → não preenche, mostra botões de seleção rápida
+    sel.value = '';
+    if (hint) hint.innerHTML =
+      `<span style="color:#d97706">⚠ Múltiplas linhas conhecidas — selecione:</span><br>` +
+      validLinhas.map(l =>
+        `<button class="linha-quick-btn" onclick="document.getElementById('${selectId}').value='${escHtml(l)}';document.getElementById('${selectId}Hint').innerHTML='<span style=color:#16a34a>✓ ${escHtml(l)}</span>'">${escHtml(l)}</button>`
+      ).join('');
+    setTimeout(() => sel.focus(), 80);
+  }
 }
 
 function learnFornecedorLinha(fornecedor, linha) {
   if (!fornecedor || !linha) return;
-  if (!linhasConfig.fornecedores) linhasConfig.fornecedores = {};
-  linhasConfig.fornecedores[normalizeForn(fornecedor)] = linha;
+  const norm = normalizeForn(fornecedor);
+  if (!linhasConfig.fornecedores)      linhasConfig.fornecedores = {};
+  if (!linhasConfig.fornecedoresLinhas) linhasConfig.fornecedoresLinhas = {};
+  linhasConfig.fornecedores[norm] = linha;
+  const prev = linhasConfig.fornecedoresLinhas[norm] || [];
+  if (!prev.includes(linha)) linhasConfig.fornecedoresLinhas[norm] = [...prev, linha];
   saveLinhas();
 }
 
