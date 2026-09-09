@@ -5396,9 +5396,9 @@ function renderBoletoMainScreen() {
   c.innerHTML = `
     ${savedHtml}
     <div style="display:flex;flex-direction:column;gap:10px">
-      <button class="cmv-mainbtn-foto" onclick="openBoletoCamera()" style="width:100%;justify-content:center">📷 Câmera</button>
-      <button class="cmv-mainbtn-foto cmv-mainbtn-galeria" onclick="openBoletoGaleria()" style="width:100%;justify-content:center">🖼️ Galeria</button>
-      <button class="cmv-mainbtn-manual" onclick="renderBoletoForm(null)" style="width:100%;justify-content:center">📝 Digitar manualmente</button>
+      <button class="boleto-btn" onclick="openBoletoCamera()">📷 Câmera</button>
+      <button class="boleto-btn" onclick="openBoletoGaleria()">🖼️ Galeria</button>
+      <button class="boleto-btn boleto-btn-primary" onclick="renderBoletoForm(null)">📝 Digitar manualmente</button>
     </div>
     ${saved.length ? `<button class="inv-modal-btn" onclick="concludeBoletos()" style="margin-top:20px">✓ Concluir (${saved.length} boleto${saved.length > 1 ? 's' : ''})</button>` : ''}
   `;
