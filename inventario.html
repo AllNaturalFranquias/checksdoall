@@ -175,7 +175,8 @@
         </div>
         <div class="nota-field">
           <label>Linha de produto</label>
-          <select id="nfRevLinha" class="inv-select-linha"></select>
+          <select id="nfRevLinha" class="inv-select-linha" onchange="document.getElementById('nfRevLinhaHint').innerHTML=''"></select>
+          <span id="nfRevLinhaHint" class="linha-hint"></span>
         </div>
         <div class="nota-field nf-data-field">
           <label>Data da NF <span class="nf-data-warn" id="nfDataWarn"></span></label>
@@ -227,7 +228,8 @@
       </div>
       <div class="nota-field">
         <label>Linha de produto</label>
-        <select id="notaLinha" class="inv-select-linha"></select>
+        <select id="notaLinha" class="inv-select-linha" onchange="document.getElementById('notaLinhaHint').innerHTML=''"></select>
+        <span id="notaLinhaHint" class="linha-hint"></span>
       </div>
       <div class="nota-field">
         <label>Valor (R$)</label>
