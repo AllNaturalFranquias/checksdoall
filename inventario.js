@@ -513,7 +513,8 @@ let state = {
   data: {},       // { HORTI: { semana_1: { 'Alface': { i: 5, e: 3, f: 2 } } } }
   cotacoes: {},   // { q1: { HORTI: { 'Alface': 4.50 } }, q2: { ... } }
   cmv: {},        // { semana_1: { faturamento: 100000, meta_pct: 30, notas: [] } }
-  dre: {}         // { 'YYYY-MM': { impostos_pct, mao_obra_propria, mao_obra_terceiros, despesas: {} } }
+  dre: {},        // { 'YYYY-MM': { impostos_pct, mao_obra_propria, mao_obra_terceiros, despesas: {} } }
+  fichasMapping: {} // { 'Nome do prato (PDV)': 'Nome da ficha técnica' }
 };
 
 // ── DRE: mês de navegação ─────────────────────────────────────
@@ -1012,18 +1013,17 @@ function itemCard(sectionKey, item, id) {
         <span class="inv-preco-var" id="var_${id}"></span>
       </div>
 
-      <!-- Campos de contagem -->
+      <!-- Campos de contagem: Inicial e Entradas são somente leitura -->
       <div class="inv-fields">
-        <div class="inv-field">
-          <label>Inicial</label>
+        <div class="inv-field inv-field-locked">
+          <label>Inicial <span class="inv-lock-badge">sem. ant.</span></label>
           <input type="number" inputmode="decimal" min="0" step="any"
-                 id="i_${id}" placeholder="—"
-                 oninput="onFieldChange('${sectionKey}','${escHtml(item.name)}','i',this.value)">
+                 id="i_${id}" placeholder="—" readonly>
         </div>
-        <div class="inv-field entrada">
-          <label>Entradas</label>
+        <div class="inv-field entrada inv-field-locked">
+          <label>Entradas <span class="inv-lock-badge">NF</span>${IS_ADMIN ? ` <button class="inv-entry-unlock" onclick="unlockEntrada('${id}','${sectionKey}','${escHtml(item.name)}')" title="Editar entrada manualmente">✏</button>` : ''}</label>
           <input type="number" inputmode="decimal" min="0" step="any"
-                 id="e_${id}" placeholder="—"
+                 id="e_${id}" placeholder="—" readonly
                  oninput="onFieldChange('${sectionKey}','${escHtml(item.name)}','e',this.value)">
         </div>
         <div class="inv-field">
@@ -1109,6 +1109,17 @@ function onFieldChange(sectionKey, itemName, field, rawValue) {
   updateBadge(sectionKey);
   renderContagemDash();
   scheduleSave();
+}
+
+// Desbloqueia campo Entradas para edição manual (somente admin)
+function unlockEntrada(id, sectionKey, itemName) {
+  if (!IS_ADMIN) return;
+  const inp   = document.getElementById('e_' + id);
+  const field = inp?.closest('.inv-field');
+  if (!inp) return;
+  inp.removeAttribute('readonly');
+  if (field) field.classList.remove('inv-field-locked');
+  inp.focus();
 }
 
 // ── Cotação de preço ──────────────────────────────────────────
@@ -1339,16 +1350,27 @@ function switchTab(key) {
 }
 
 // ── Semana ────────────────────────────────────────────────────
+function getCurrentView() {
+  const views = ['dashboard','contagem','cmv','notas','config','comparativo','dre'];
+  for (const v of views) {
+    const el = document.getElementById('view-' + v);
+    if (el && el.style.display !== 'none') return v;
+  }
+  return 'dashboard';
+}
+
 function switchWeek(weekKey) {
   state.semana = weekKey;
   updateWeekNav();
-  restoreValues();
-  renderContagemDash();
   updateAllBadges();
-  renderCMVPanel();
+  const view = getCurrentView();
+  if (view === 'contagem')    { restoreValues(); renderContagemDash(); }
+  if (view === 'dashboard')   renderDashboard();
+  if (view === 'cmv')         renderCMVPanel();
+  if (view === 'notas')       renderNotasPanel();
+  if (view === 'comparativo') renderComparativo();
+  if (view === 'dre')         renderDRE();
   scheduleSave();
-  const dash = document.getElementById('view-dashboard');
-  if (dash && dash.style.display !== 'none') renderDashboard();
 }
 
 function updateWeekNav() {
@@ -1732,8 +1754,9 @@ function saveNota() {
   learnFornecedorLinha(fornecedor, linha);
   const d = getCMVData();
   if (!d.notas) d.notas = [];
+  const notaId = Date.now().toString(36);
   d.notas.push({
-    id: Date.now().toString(36),
+    id: notaId,
     fornecedor, linha, valor,
     data: data ? new Date(data).toLocaleDateString('pt-BR') : '',
     ts: Date.now()
@@ -1742,6 +1765,7 @@ function saveNota() {
   doSaveNow();
   renderCMVPanel();
   renderNotasPanel();
+  showBoletoPrompt(notaId, state.semana);
 }
 
 function openEditNota(id) {
@@ -2715,7 +2739,8 @@ async function confirmNFItems() {
     valor: i.preco_total || 0,
     linha: i.linha || defaultLinha
   })).filter(i => i.nome);
-  d.notas.push({ id: Date.now().toString(36), fornecedor, ...linhaFields, valor: total, data: dataFmt, ts: Date.now(), itens: itensResumo.length ? itensResumo : undefined });
+  const notaId = Date.now().toString(36);
+  d.notas.push({ id: notaId, fornecedor, ...linhaFields, valor: total, data: dataFmt, ts: Date.now(), itens: itensResumo.length ? itensResumo : undefined });
 
   // Atualizar cotações com preços lidos
   const q = getQuinzena(state.semana);
@@ -2757,6 +2782,7 @@ async function confirmNFItems() {
   renderNotasPanel();
   restoreValues();
   showToast(`NF salva ✓ · ${updatedPrices} preço${updatedPrices !== 1 ? 's' : ''} atualizado${updatedPrices !== 1 ? 's' : ''}`);
+  showBoletoPrompt(notaId, state.semana);
 }
 
 // ── CMV Top Panel ─────────────────────────────────────────────
@@ -2868,8 +2894,11 @@ function switchNotasTab(tab, btn) {
   document.querySelectorAll('.cmv-nvtab').forEach(b => b.classList.toggle('active', b === btn));
   const t = document.getElementById('notasTabTodas');
   const l = document.getElementById('notasTabLinha');
-  if (t) t.style.display = tab === 'todas' ? '' : 'none';
+  const f = document.getElementById('notasTabFluxo');
+  if (t) t.style.display = tab === 'todas'  ? '' : 'none';
   if (l) l.style.display = tab === 'linha'  ? '' : 'none';
+  if (f) f.style.display = tab === 'fluxo' ? '' : 'none';
+  if (tab === 'fluxo' && f) f.innerHTML = buildFluxoCaixaHtml();
 }
 
 function quickReassignLinha(notaId, novaLinha) {
@@ -3031,6 +3060,8 @@ function renderNotasPanel() {
   const hasOutros = notas.some(n => (!n.linha && !n.linhas?.length) || n.linha === 'Outros');
   const geminiOk = !!getGeminiKey();
 
+  const totalBoletos = notas.reduce((s, n) => s + (n.boletos?.length || 0), 0);
+
   const notasHtml = notas.length
     ? notas.map(n => {
         const linhasDisplay = n.linhas?.length
@@ -3038,6 +3069,9 @@ function renderNotasPanel() {
           : n.linha ? `<span class="cmv-panel-nota-linha">${escHtml(n.linha)}</span>`
                     : '<span class="cmv-panel-nota-linha" style="color:#f59e0b">sem linha ⚠</span>';
         const itensCount = n.itens?.length ? `<span class="cmv-nota-itens-count">${n.itens.length} itens</span>` : '';
+        const boletoBadge = n.boletos?.length
+          ? `<span class="cmv-nota-boleto-badge" onclick="event.stopPropagation();switchView('notas');setTimeout(()=>{document.querySelector('.cmv-nvtab:nth-child(3)')?.click()},50)" title="Ver fluxo de caixa">🧾 ${n.boletos.length}  bol.</span>`
+          : `<button class="cmv-nota-add-boleto" onclick="event.stopPropagation();showBoletoPrompt('${n.id}','${state.semana}')" title="Lançar boleto">+ boleto</button>`;
         return `<div class="cmv-panel-nota cmv-panel-nota-clickable" onclick="openNotaDetail('${n.id}')">
           <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px">
@@ -3045,6 +3079,7 @@ function renderNotasPanel() {
               ${itensCount}
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:4px">${linhasDisplay}</div>
+            <div style="margin-top:2px">${boletoBadge}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
             <span class="cmv-panel-nota-val">R$ ${fmt(n.valor)}</span>
@@ -3077,6 +3112,7 @@ function renderNotasPanel() {
       <div class="cmv-notas-view-tabs" style="display:flex;gap:6px;padding:8px 0 4px">
         <button class="cmv-nvtab active" onclick="switchNotasTab('todas',this)">Todas (${notas.length})</button>
         <button class="cmv-nvtab" onclick="switchNotasTab('linha',this)">Por Linha ${hasOutros ? '⚠' : ''}</button>
+        <button class="cmv-nvtab" onclick="switchNotasTab('fluxo',this)">💰 Fluxo${totalBoletos ? ` (${totalBoletos})` : ''}</button>
       </div>
       <div id="notasTabTodas">
         <div class="cmv-panel-notas-list">${notasHtml}</div>
@@ -3084,6 +3120,7 @@ function renderNotasPanel() {
       <div id="notasTabLinha" style="display:none">
         ${buildNotasByLinhaHtml(notas)}
       </div>
+      <div id="notasTabFluxo" style="display:none"></div>
     </div>
   `;
 }
@@ -3216,6 +3253,16 @@ function openRelatorioSemanal() {
   maioresAltas.push(...comparacao.filter(r => r.delta > 20 && r.cAnt > 0).slice(0, 10));
   maioresBaixas.push(...comparacao.filter(r => r.delta < -20 && r.cAnt > 0).slice(0, 10));
 
+  // Ranking absoluto: maiores e menores consumos da semana
+  const maioresConsumos = [...comparacao]
+    .filter(r => r.cAtual > 0)
+    .sort((a, b) => b.cAtual - a.cAtual)
+    .slice(0, 8);
+  const menoresConsumos = [...comparacao]
+    .filter(r => r.cAtual > 0 && r.cAnt > 0)
+    .sort((a, b) => a.cAtual - b.cAtual)
+    .slice(0, 5);
+
   const fmtC = (v, u) => v === null || v === undefined ? '—' : `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
   const fmtN = (v, u) => v === null || v === undefined ? '—' : `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
   const fmtD = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -3298,7 +3345,31 @@ function openRelatorioSemanal() {
       ${maioresBaixas.map(rowHtml).join('')}
     </div>` : ''}
 
-    ${!semZeroConsumo.length && !maioresAltas.length && !maioresBaixas.length
+    ${maioresConsumos.length ? `
+    <div class="relat-section">
+      <div class="relat-section-title">🏆 Maiores consumos da semana</div>
+      ${maioresConsumos.map((r, i) => `
+        <div class="relat-rank-row">
+          <span class="relat-rank-num">${i + 1}</span>
+          <span class="relat-rank-nome">${escHtml(r.nome)}</span>
+          <span class="relat-rank-sect">${escHtml(r.section)}</span>
+          <span class="relat-rank-val">${fmtC(r.cAtual, r.unit)}</span>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${menoresConsumos.length ? `
+    <div class="relat-section">
+      <div class="relat-section-title">📉 Menores consumos da semana</div>
+      ${menoresConsumos.map((r, i) => `
+        <div class="relat-rank-row">
+          <span class="relat-rank-num">${i + 1}</span>
+          <span class="relat-rank-nome">${escHtml(r.nome)}</span>
+          <span class="relat-rank-sect">${escHtml(r.section)}</span>
+          <span class="relat-rank-val">${fmtC(r.cAtual, r.unit)}</span>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${!semZeroConsumo.length && !maioresAltas.length && !maioresBaixas.length && !maioresConsumos.length
       ? '<p style="text-align:center;color:#9ca3af;padding:40px 0">Sem dados suficientes para comparar semanas.</p>' : ''}
   `;
 
@@ -4231,15 +4302,31 @@ function renderComparativo() {
     .filter(([k]) => /^\d{4}-W\d{2}$/.test(k))
     .sort(([a], [b]) => a < b ? -1 : 1)
     .map(([k, d]) => {
-      const fat   = d?.faturamento || 0;
-      const gasto = (d?.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
-      const cmvPct = fat > 0 ? gasto / fat * 100 : null;
+      const fat    = d?.faturamento || 0;
+      const gasto  = (d?.notas || []).reduce((s, n) => s + (n.valor || 0), 0);
       const meta   = d?.meta_pct || 30;
-      return { key: k, label: getWeekLabel(k), fat, gasto, cmvPct, meta };
+      const budget = fat > 0 ? fat * (meta / 100) : 0;
+      const diff   = fat > 0 ? budget - gasto : null; // positivo = economizou, negativo = excedeu
+      const cmvPct = fat > 0 ? gasto / fat * 100 : null;
+      return { key: k, label: getWeekLabel(k), fat, gasto, cmvPct, meta, budget, diff };
     })
     .filter(w => w.fat > 0 || w.gasto > 0)
     .filter(w => w.key !== getWeekKey())
     .slice(-10);
+
+  // Resumo mensal (agrupa semanas por mês)
+  const monthMap = {};
+  cmvWeeks.forEach(w => {
+    const mon = getWeekMonday(w.key);
+    const mk  = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}`;
+    const ml  = mon.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    if (!monthMap[mk]) monthMap[mk] = { label: ml, fat: 0, gasto: 0, budget: 0, diff: 0, hasDiff: false, meta: w.meta };
+    monthMap[mk].fat    += w.fat;
+    monthMap[mk].gasto  += w.gasto;
+    monthMap[mk].budget += w.budget;
+    if (w.diff !== null) { monthMap[mk].diff += w.diff; monthMap[mk].hasDiff = true; }
+  });
+  const monthList = Object.entries(monthMap).sort(([a], [b]) => a < b ? -1 : 1);
 
   // 2. Preços monitorados – cotacoes (q1/q2) + precoSem (semanal)
   const cotacoes = state.cotacoes || {};
@@ -4274,17 +4361,23 @@ function renderComparativo() {
     ? '<p class="comp-empty">Nenhuma semana com dados ainda.</p>'
     : `<div class="comp-table-wrap">
         <table class="comp-table">
-          <thead><tr><th>Semana</th><th>Fat.</th><th>Gasto</th><th>CMV</th></tr></thead>
+          <thead><tr><th>Semana</th><th>Fat.</th><th>Gasto</th><th>CMV</th><th>Econ./Exced.</th></tr></thead>
           <tbody>${cmvWeeks.map(w => {
             const col = w.cmvPct == null ? '#9ca3af'
               : w.cmvPct > w.meta * 1.1 ? '#ef4444'
               : w.cmvPct > w.meta       ? '#f59e0b' : '#16a34a';
             const isCur = w.key === state.semana;
+            const diffCls = w.diff == null ? 'comp-econ-zero'
+              : w.diff > 0 ? 'comp-econ-pos' : 'comp-econ-neg';
+            const diffTxt = w.diff == null ? '—'
+              : (w.diff > 0 ? '▼ ' : '▲ ') + 'R$ ' + fmt(Math.abs(w.diff));
+            const diffTitle = w.diff == null ? '' : w.diff > 0 ? 'Economizou' : 'Excedeu meta';
             return `<tr style="${isCur ? 'background:#fef9f9' : ''}">
               <td style="${isCur ? 'font-weight:700' : ''}">${w.label}${isCur ? ' ←' : ''}</td>
               <td>${w.fat > 0 ? 'R$ ' + fmt(w.fat) : '—'}</td>
               <td>${w.gasto > 0 ? 'R$ ' + fmt(w.gasto) : '—'}</td>
               <td style="font-weight:700;color:${col}">${w.cmvPct != null ? w.cmvPct.toFixed(1) + '%' : '—'}</td>
+              <td class="${diffCls}" title="${diffTitle}">${diffTxt}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
@@ -4351,12 +4444,35 @@ function renderComparativo() {
         </div>`;
       }).join('');
 
+  // ── Render resumo mensal
+  const monthHtml = monthList.length === 0
+    ? '<p class="comp-empty">Sem dados mensais ainda.</p>'
+    : `<div class="comp-month-list">
+        ${monthList.map(([, m]) => {
+          const cmvPct = m.fat > 0 ? (m.gasto / m.fat * 100) : null;
+          const diffCls  = !m.hasDiff ? 'comp-econ-zero'
+            : m.diff > 0 ? 'comp-econ-pos' : 'comp-econ-neg';
+          const diffTxt  = !m.hasDiff ? '—'
+            : (m.diff > 0 ? '▼ economizou ' : '▲ excedeu ') + 'R$ ' + fmt(Math.abs(m.diff));
+          return `<div class="comp-month-row">
+            <span class="comp-month-name">${escHtml(m.label)}</span>
+            <span class="comp-month-fat">${m.fat > 0 ? 'Fat. R$ ' + fmt(m.fat) : ''}</span>
+            <span class="comp-month-econ ${diffCls}">${diffTxt}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+
   el.innerHTML = `
     <div class="comp-view">
       <div class="comp-section">
         <div class="comp-section-title">📈 CMV por Semana</div>
-        <div class="comp-section-sub">Histórico · últimas semanas com dados</div>
+        <div class="comp-section-sub">Histórico · últimas semanas — ▼ economizou · ▲ excedeu meta</div>
         ${cmvHistHtml}
+      </div>
+      <div class="comp-section">
+        <div class="comp-section-title">📅 Resumo Mensal</div>
+        <div class="comp-section-sub">Diferença acumulada vs meta CMV por mês</div>
+        ${monthHtml}
       </div>
       <div class="comp-section">
         <div class="comp-section-title">💰 Preços Monitorados</div>
@@ -4373,7 +4489,279 @@ function renderComparativo() {
         <div class="comp-section-sub">Acumulado total · R$ ${fmt(totalLinha)}</div>
         <div class="comp-linhas-list">${linhaHtml}</div>
       </div>
+      <div class="comp-section" style="text-align:center;padding:20px">
+        <div class="comp-section-title" style="justify-content:center">🔬 Cruzamento Fichas × Vendas</div>
+        <div class="comp-section-sub" style="margin-bottom:14px">Compare consumo teórico (fichas) vs consumo real (estoque)</div>
+        <button class="crz-btn" onclick="openCruzamento()">Abrir análise</button>
+      </div>
     </div>`;
+}
+
+// ── Cruzamento Fichas × Vendas ────────────────────────────────
+let _crzData   = null; // { headers, rows } do xlsx
+let _crzProds  = null; // { produto: qtd } parsed
+let _crzColNome = -1;
+let _crzColQtd  = -1;
+
+function openCruzamento() {
+  document.getElementById('crzOverlay').style.display = 'flex';
+  renderCrzStep1();
+}
+function closeCruzamento() {
+  document.getElementById('crzOverlay').style.display = 'none';
+}
+
+function renderCrzStep1() {
+  const el = document.getElementById('crzSteps');
+  // check for saved mapping to allow going directly to results
+  const hasMapping = Object.keys(state.fichasMapping || {}).length > 0;
+  el.innerHTML = `
+    <div class="crz-section-title">1. Carregar planilha de produtos vendidos</div>
+    <div class="crz-card">
+      <div class="crz-drop" id="crzDrop" onclick="document.getElementById('crzFile').click()">
+        <div class="crz-drop-icon">📊</div>
+        <div class="crz-drop-title">Arraste o arquivo aqui</div>
+        <div class="crz-drop-sub">Excel com nome do produto e quantidade vendida</div>
+        <input type="file" id="crzFile" accept=".xlsx,.xls" style="display:none">
+      </div>
+    </div>
+    ${hasMapping ? `
+    <div class="crz-card">
+      <div class="crz-section-title">Já tenho um mapeamento salvo</div>
+      <p class="crz-info">Você tem ${Object.keys(state.fichasMapping).length} produtos mapeados. Carregue uma nova planilha para recalcular, ou veja os resultados da última semana com os dados atuais.</p>
+      <button class="crz-btn-sec" onclick="renderCrzResultsFromState()">Ver resultados com dados atuais</button>
+    </div>` : ''}
+  `;
+  // drag + drop
+  const drop = document.getElementById('crzDrop');
+  if (drop) {
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag-over'); handleCrzFile(e.dataTransfer.files[0]); });
+  }
+  const inp = document.getElementById('crzFile');
+  if (inp) inp.addEventListener('change', e => { if (e.target.files[0]) handleCrzFile(e.target.files[0]); });
+}
+
+function handleCrzFile(file) {
+  if (!file) return;
+  if (!file.name.match(/\.(xlsx|xls)$/i)) { showToast('Arquivo deve ser .xlsx', 'error'); return; }
+  showToast('Lendo arquivo…', 'info');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb   = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      _crzData = { rows };
+      renderCrzStep2(rows);
+    } catch(err) { showToast('Erro ao ler: ' + err.message, 'error'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderCrzStep2(rows) {
+  // Find header row: first row with multiple non-empty cells
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    if (rows[i].filter(c => c !== '').length >= 2) { headerIdx = i; break; }
+  }
+  const headers = rows[headerIdx].map(String);
+  _crzData.headerIdx = headerIdx;
+  _crzData.headers   = headers;
+
+  // Auto-detect columns
+  const nomeIdx = headers.findIndex(h => /produto|item|descri|nome/i.test(h));
+  const qtdIdx  = headers.findIndex(h => /qtd|quant|und|unit|vend|amount|total/i.test(h));
+
+  const colOptions = headers.map((h, i) => `<option value="${i}" ${i === nomeIdx ? 'selected' : ''}>${h || 'Col ' + (i+1)}</option>`).join('');
+  const qtdOptions = headers.map((h, i) => `<option value="${i}" ${i === qtdIdx ? 'selected' : ''}>${h || 'Col ' + (i+1)}</option>`).join('');
+
+  const preview = rows.slice(headerIdx + 1, headerIdx + 6)
+    .map(r => `<tr>${headers.map((_, i) => `<td>${escHtml(String(r[i] || ''))}</td>`).join('')}</tr>`)
+    .join('');
+
+  const el = document.getElementById('crzSteps');
+  el.innerHTML = `
+    <div class="crz-section-title">2. Identificar colunas</div>
+    <div class="crz-card">
+      <div class="crz-col-row">
+        <div class="crz-col-field">
+          <label>Coluna: Nome do Produto</label>
+          <select id="crzColNome">${colOptions}</select>
+        </div>
+        <div class="crz-col-field">
+          <label>Coluna: Quantidade Vendida</label>
+          <select id="crzColQtd">${qtdOptions}</select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;margin-top:8px">
+        <table class="crz-preview-table">
+          <thead><tr>${headers.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead>
+          <tbody>${preview}</tbody>
+        </table>
+      </div>
+      <button class="crz-btn" onclick="processCrzColumns()">Confirmar colunas →</button>
+    </div>
+  `;
+}
+
+function processCrzColumns() {
+  const ni = parseInt(document.getElementById('crzColNome').value);
+  const qi = parseInt(document.getElementById('crzColQtd').value);
+  _crzColNome = ni;
+  _crzColQtd  = qi;
+
+  const { rows, headerIdx } = _crzData;
+  const prods = {};
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const nome = String(rows[i][ni] || '').trim();
+    const qtd  = parseFloat(String(rows[i][qi]).replace(',', '.'));
+    if (!nome || isNaN(qtd) || qtd <= 0) continue;
+    prods[nome] = (prods[nome] || 0) + qtd;
+  }
+  _crzProds = prods;
+  renderCrzStep3();
+}
+
+function renderCrzStep3() {
+  if (!state.fichasMapping) state.fichasMapping = {};
+  const fichas = state.fichas || FICHAS_DEFAULT;
+  const fichaOpts = `<option value="">— não mapear —</option>` +
+    fichas.map(f => `<option value="${escHtml(f.nome)}">${escHtml(f.nome)}</option>`).join('');
+
+  const rows = Object.entries(_crzProds).sort((a,b) => b[1] - a[1]);
+  const rowsHtml = rows.map(([nome, qtd]) => {
+    const cur = state.fichasMapping[nome] || '';
+    return `<div class="crz-map-row">
+      <span class="crz-map-produto" title="${escHtml(nome)}">${escHtml(nome)}</span>
+      <span class="crz-map-qtd">${qtd % 1 === 0 ? qtd : qtd.toFixed(1)}×</span>
+      <select class="crz-map-select${cur ? ' mapped' : ''}" data-prod="${escHtml(nome)}"
+              onchange="onCrzMap(this)">
+        ${fichaOpts.replace(`value="${escHtml(cur)}"`, `value="${escHtml(cur)}" selected`)}
+      </select>
+    </div>`;
+  }).join('');
+
+  const el = document.getElementById('crzSteps');
+  el.innerHTML = `
+    <div class="crz-section-title">3. Mapear produtos → fichas técnicas</div>
+    <p class="crz-info">${rows.length} produtos encontrados. Mapeie cada um à ficha técnica correspondente (só precisa fazer uma vez).</p>
+    <div class="crz-card">${rowsHtml}</div>
+    <button class="crz-btn" onclick="runCrzAnalysis()">Calcular cruzamento →</button>
+    <button class="crz-btn-sec" style="margin-left:8px" onclick="renderCrzStep1()">← Voltar</button>
+  `;
+}
+
+function onCrzMap(sel) {
+  const prod = sel.dataset.prod;
+  const ficha = sel.value;
+  if (!state.fichasMapping) state.fichasMapping = {};
+  if (ficha) {
+    state.fichasMapping[prod] = ficha;
+    sel.classList.add('mapped');
+  } else {
+    delete state.fichasMapping[prod];
+    sel.classList.remove('mapped');
+  }
+  scheduleSave();
+}
+
+function runCrzAnalysis() {
+  const fichas   = state.fichas || FICHAS_DEFAULT;
+  const mapping  = state.fichasMapping || {};
+  const prods    = _crzProds || {};
+  const teorico  = {}; // ingr name → { qtd, unit }
+
+  for (const [produto, qtdVendida] of Object.entries(prods)) {
+    const fichaNome = mapping[produto];
+    if (!fichaNome) continue;
+    const ficha = fichas.find(f => f.nome === fichaNome);
+    if (!ficha || !ficha.ing) continue;
+
+    // factor = porcao_size / rendimento_total (porcao/rend se definido, senão 1)
+    const factor = (ficha.rend > 0 && ficha.porcao > 0)
+      ? ficha.porcao / ficha.rend
+      : 1;
+
+    for (const ing of ficha.ing) {
+      const key = ing.n;
+      if (!teorico[key]) teorico[key] = { qtd: 0, unit: ing.u };
+      teorico[key].qtd += ing.q * factor * qtdVendida;
+    }
+  }
+  renderCrzResults(teorico);
+}
+
+function renderCrzResultsFromState() {
+  // Recalcula usando mapeamento salvo e consumo atual da semana
+  _crzProds = state.fichasMapping
+    ? Object.fromEntries(Object.keys(state.fichasMapping).map(p => [p, 1]))
+    : {};
+  showToast('Usando mapeamento salvo — sem quantidades vendidas. Carregue a planilha para ver resultados precisos.');
+  runCrzAnalysis();
+}
+
+function renderCrzResults(teorico) {
+  const real = getConsumoSemana(state.semana);
+  const fmtQ = (v, u) => v == null ? '—' : `${v % 1 === 0 ? v : v.toFixed(2)} ${u}`;
+
+  const linhas = Object.entries(teorico)
+    .map(([nome, t]) => {
+      const r        = real[nome];
+      const realQtd  = r ? r.consumo : null;
+      const diff     = realQtd != null ? realQtd - t.qtd : null;
+      const diffPct  = t.qtd > 0 && diff != null ? (diff / t.qtd * 100) : null;
+      return { nome, teorico: t.qtd, real: realQtd, diff, diffPct, unit: t.unit };
+    })
+    .sort((a, b) => {
+      if (a.diff == null && b.diff == null) return 0;
+      if (a.diff == null) return 1;
+      if (b.diff == null) return -1;
+      return Math.abs(b.diff) - Math.abs(a.diff);
+    });
+
+  const mapeados = Object.values(_crzProds || {}).filter(q => q > 0).length;
+  const fichaMap = Object.keys(state.fichasMapping || {}).length;
+  const totalTeorico = Object.values(teorico).reduce((s, t) => {
+    const u = t.unit?.toLowerCase();
+    return u === 'kg' ? s + t.qtd : s;
+  }, 0);
+
+  const tableRows = linhas.map(l => {
+    const diffCls = l.diff == null ? '' : l.diff > 0.1 * l.teorico ? 'crz-diff-pos' : l.diff < -0.1 * l.teorico ? 'crz-diff-neg' : 'crz-diff-ok';
+    const diffStr = l.diff == null ? '—' : (l.diff > 0 ? '+' : '') + fmtQ(l.diff, l.unit);
+    const pctStr  = l.diffPct != null ? ` (${l.diffPct > 0 ? '+' : ''}${l.diffPct.toFixed(0)}%)` : '';
+    return `<tr>
+      <td style="font-weight:600">${escHtml(l.nome)}</td>
+      <td>${fmtQ(l.teorico, l.unit)}</td>
+      <td>${l.real != null ? fmtQ(l.real, l.unit) : '—'}</td>
+      <td class="${diffCls}">${diffStr}${pctStr}</td>
+    </tr>`;
+  }).join('');
+
+  const el = document.getElementById('crzSteps');
+  el.innerHTML = `
+    <div class="crz-section-title">4. Resultados — ${getWeekLabel(state.semana)}</div>
+    <div class="crz-summary-bar">
+      <span class="crz-summary-chip">📊 ${fichaMap} produtos mapeados</span>
+      <span class="crz-summary-chip">🧪 ${linhas.length} ingredientes analisados</span>
+    </div>
+    <p class="crz-info" style="margin-bottom:12px">
+      <b>Diferença positiva (+)</b> = real &gt; teórico (possível perda ou sobra mal contada).<br>
+      <b>Diferença negativa (−)</b> = real &lt; teórico (sobra em estoque ou ficha desatualizada).
+    </p>
+    <div style="overflow-x:auto">
+      <table class="crz-result-table">
+        <thead><tr><th>Ingrediente</th><th>Teórico</th><th>Real (consumo)</th><th>Diferença</th></tr></thead>
+        <tbody>${tableRows || '<tr><td colspan="4" style="text-align:center;color:#9ca3af;padding:24px">Sem ingredientes com mapeamento completo.</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="crz-btn-sec" onclick="renderCrzStep3()">← Editar mapeamento</button>
+      <button class="crz-btn-sec" onclick="renderCrzStep1()">Nova planilha</button>
+    </div>
+  `;
 }
 
 // ── Fichas Técnicas ───────────────────────────────────────────
@@ -4865,3 +5253,377 @@ function flushPendingSync() {
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPendingSync(); });
 window.addEventListener('pagehide', flushPendingSync);
+
+// ── Boletos ────────────────────────────────────────────────────
+let _boletoNotaId     = null;
+let _boletoWeekKey    = null;
+let _boletosPendentes = [];
+
+function showBoletoPrompt(notaId, weekKey) {
+  _boletoNotaId     = notaId;
+  _boletoWeekKey    = weekKey;
+  _boletosPendentes = [];
+  const el = document.getElementById('invBoletoPromptOverlay');
+  if (el) el.style.display = 'flex';
+}
+
+function closeBoletoPrompt() {
+  const el = document.getElementById('invBoletoPromptOverlay');
+  if (el) el.style.display = 'none';
+}
+
+function openBoletoCapture() {
+  closeBoletoPrompt();
+  const el = document.getElementById('invBoletoOverlay');
+  if (el) {
+    el.style.display = 'flex';
+    renderBoletoMainScreen();
+  }
+}
+
+function closeBoletoOverlay() {
+  const el = document.getElementById('invBoletoOverlay');
+  if (el) el.style.display = 'none';
+  _boletosPendentes = [];
+}
+
+function openBoletoCamera()  { document.getElementById('boletoCamera')?.click(); }
+function openBoletoGaleria() { document.getElementById('boletoGaleria')?.click(); }
+
+async function handleBoletoPhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  input.value = '';
+  renderBoletoLoading();
+  const el = document.getElementById('invBoletoOverlay');
+  if (el) el.style.display = 'flex';
+  try {
+    const base64 = await fileToBase64(file);
+    const data   = await callGeminiBoleto(base64, 'image/jpeg');
+    renderBoletoForm(data);
+  } catch(e) {
+    renderBoletoError(e?.message || String(e));
+  }
+}
+
+async function callGeminiBoleto(base64Data, mimeType, attempt = 1) {
+  const MAX_ATTEMPTS = 5;
+  const prompt = `Você está lendo um boleto bancário brasileiro. Extraia e retorne APENAS um JSON válido (sem markdown, sem texto):
+{
+  "valor": 0.00,
+  "vencimento": "DD/MM/YYYY",
+  "linha_digitavel": "linha digitável completa (todos os dígitos)",
+  "beneficiario": "nome do favorecido"
+}
+Se não conseguir ler algum campo, use null. Retorne APENAS o JSON.`;
+
+  const key = getGeminiKey();
+  const reqBody = JSON.stringify({
+    contents: [{ parts: [
+      { inline_data: { mime_type: mimeType, data: base64Data } },
+      { text: prompt }
+    ]}],
+    generationConfig: { temperature: 0.05 }
+  });
+
+  const MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  const ROOT   = 'https://generativelanguage.googleapis.com/v1/models/';
+  let resp;
+  for (const model of MODELS) {
+    resp = await fetch(`${ROOT}${model}:generateContent`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: reqBody });
+    if (resp.status !== 404) break;
+  }
+  if (!resp.ok) {
+    if (attempt < MAX_ATTEMPTS && (resp.status === 429 || resp.status === 503)) {
+      const delay = resp.status === 429 ? 60000 : 3000 * attempt;
+      await new Promise(r => setTimeout(r, delay));
+      return callGeminiBoleto(base64Data, mimeType, attempt + 1);
+    }
+    throw new Error('Gemini ' + resp.status);
+  }
+  const data  = await resp.json();
+  const text  = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  const clean = text.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/```$/, '').trim();
+  return JSON.parse(clean);
+}
+
+function _getNotaForBoleto() {
+  return (getCMVData(_boletoWeekKey).notas || []).find(n => n.id === _boletoNotaId);
+}
+
+function renderBoletoLoading() {
+  const c = document.getElementById('boletoOverlayContent');
+  if (c) c.innerHTML = `
+    <div style="text-align:center;padding:48px 0">
+      <div class="nf-spinner"></div>
+      <p style="margin-top:14px;color:#6b7280;font-size:13px">Lendo boleto com IA...</p>
+    </div>`;
+}
+
+function renderBoletoError(msg) {
+  const c = document.getElementById('boletoOverlayContent');
+  if (c) c.innerHTML = `
+    <div style="text-align:center;padding:24px">
+      <p style="color:#dc2626;margin-bottom:16px">Erro ao ler boleto: ${escHtml(msg.slice(0,120))}</p>
+      <button class="inv-modal-btn" onclick="renderBoletoMainScreen()">← Voltar</button>
+    </div>`;
+}
+
+function renderBoletoMainScreen() {
+  const nota = _getNotaForBoleto();
+  const title = nota ? `Boleto — ${nota.fornecedor}` : 'Lançar Boleto';
+  const el = document.getElementById('boletoOverlayTitle');
+  if (el) el.textContent = title;
+
+  const saved = _boletosPendentes;
+  const savedHtml = saved.length ? `
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:#6b7280;letter-spacing:.5px;margin-bottom:6px">ADICIONADOS (${saved.length})</div>
+      ${saved.map((b, i) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f0fdf4;border-radius:8px;margin-bottom:6px;border:1px solid #bbf7d0">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px">R$ ${fmt(b.valor)}</div>
+            <div style="font-size:12px;color:#6b7280">Venc. ${b.vencimento || '—'}</div>
+          </div>
+          <button onclick="removeBoletoP(${i})" style="background:none;border:none;font-size:18px;cursor:pointer;color:#dc2626;padding:0 4px">✕</button>
+        </div>`).join('')}
+    </div>` : '';
+
+  const c = document.getElementById('boletoOverlayContent');
+  if (!c) return;
+  c.innerHTML = `
+    ${savedHtml}
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="cmv-mainbtn-foto" onclick="openBoletoCamera()" style="width:100%;justify-content:center">📷 Câmera</button>
+      <button class="cmv-mainbtn-foto cmv-mainbtn-galeria" onclick="openBoletoGaleria()" style="width:100%;justify-content:center">🖼️ Galeria</button>
+      <button class="cmv-mainbtn-manual" onclick="renderBoletoForm(null)" style="width:100%;justify-content:center">📝 Digitar manualmente</button>
+    </div>
+    ${saved.length ? `<button class="inv-modal-btn" onclick="concludeBoletos()" style="margin-top:20px">✓ Concluir (${saved.length} boleto${saved.length > 1 ? 's' : ''})</button>` : ''}
+  `;
+}
+
+function removeBoletoP(idx) {
+  _boletosPendentes.splice(idx, 1);
+  renderBoletoMainScreen();
+}
+
+function renderBoletoForm(data) {
+  const vencInput = (() => {
+    if (!data?.vencimento) return '';
+    const p = data.vencimento.split('/');
+    return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : '';
+  })();
+  const c = document.getElementById('boletoOverlayContent');
+  if (!c) return;
+  c.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <h3 style="margin:0;font-size:15px">Dados do Boleto</h3>
+      <div class="nota-field">
+        <label>Valor (R$)</label>
+        <input type="number" inputmode="decimal" id="boletoValorInput" value="${data?.valor || ''}" placeholder="0,00">
+      </div>
+      <div class="nota-field">
+        <label>Vencimento</label>
+        <input type="date" id="boletoVencInput" value="${vencInput}">
+      </div>
+      <div class="nota-field">
+        <label>Linha Digitável</label>
+        <textarea id="boletoLinhaInput" rows="3" placeholder="Todos os dígitos do código de barras" style="width:100%;box-sizing:border-box;resize:none;font-family:monospace;font-size:12px;padding:8px;border:1.5px solid #e5e7eb;border-radius:8px">${escHtml(data?.linha_digitavel || '')}</textarea>
+      </div>
+      ${data?.beneficiario ? `<div style="font-size:12px;color:#6b7280">Beneficiário lido: ${escHtml(data.beneficiario)}</div>` : ''}
+      <button class="inv-modal-btn" onclick="confirmBoletoForm()">+ Adicionar este boleto</button>
+      <button class="inv-modal-cancel" onclick="renderBoletoMainScreen()">← Voltar</button>
+    </div>`;
+  setTimeout(() => document.getElementById('boletoValorInput')?.focus(), 80);
+}
+
+function confirmBoletoForm() {
+  const valor = parseFloat(document.getElementById('boletoValorInput')?.value);
+  const vencRaw = document.getElementById('boletoVencInput')?.value;
+  const linha   = document.getElementById('boletoLinhaInput')?.value.trim() || '';
+  const valEl   = document.getElementById('boletoValorInput');
+  if (isNaN(valor) || valor <= 0) { if (valEl) { valEl.classList.add('error'); setTimeout(()=>valEl.classList.remove('error'),500); } return; }
+  const vencimento = vencRaw ? new Date(vencRaw).toLocaleDateString('pt-BR') : '';
+  _boletosPendentes.push({ id: Date.now().toString(36), valor, vencimento, linha_digitavel: linha });
+  renderBoletoMainScreen();
+}
+
+function concludeBoletos() {
+  if (!_boletosPendentes.length) { closeBoletoOverlay(); return; }
+  const d    = getCMVData(_boletoWeekKey);
+  const nota = (d.notas || []).find(n => n.id === _boletoNotaId);
+  if (nota) {
+    if (!nota.boletos) nota.boletos = [];
+    nota.boletos.push(..._boletosPendentes);
+  }
+  doSaveNow();
+  closeBoletoOverlay();
+  renderCMVPanel();
+  renderNotasPanel();
+  showToast(`${_boletosPendentes.length} boleto${_boletosPendentes.length > 1 ? 's' : ''} salvo${_boletosPendentes.length > 1 ? 's' : ''} ✓`);
+}
+
+// ── Fluxo de Caixa — Calendário ───────────────────────────────
+let _fluxoMes = null; // {year, month} — null = mês atual
+
+function _fluxoByDate() {
+  const map = {};
+  Object.values(state.cmv || {}).forEach(wd => {
+    (wd?.notas || []).forEach(n => {
+      (n.boletos || []).forEach(b => {
+        if (!b.vencimento) return;
+        (map[b.vencimento] = map[b.vencimento] || []).push({ ...b, fornecedor: n.fornecedor });
+      });
+    });
+  });
+  return map;
+}
+
+function buildFluxoCaixaHtml() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (!_fluxoMes) _fluxoMes = { year: today.getFullYear(), month: today.getMonth() };
+  const { year, month } = _fluxoMes;
+
+  const byDate = _fluxoByDate();
+  const allBols = Object.values(byDate).flat();
+
+  if (!allBols.length) return `<p style="color:#9ca3af;text-align:center;padding:32px 0;font-size:13px">Nenhum boleto lançado ainda.<br>Após salvar uma NF, aperte <strong>+ boleto</strong>.</p>`;
+
+  const parseD = s => { const p = s.split('/'); return p.length===3 ? new Date(+p[2],+p[1]-1,+p[0]) : null; };
+  const dayKey  = d  => `${String(d).padStart(2,'0')}/${String(month+1).padStart(2,'0')}/${year}`;
+
+  // KPI: total a vencer (hoje em diante, todos os meses)
+  const totalFuturo = allBols.filter(b => { const d=parseD(b.vencimento); return d && d>=today; })
+                              .reduce((s,b) => s+(b.valor||0), 0);
+
+  // Total do mês exibido
+  const lastDay   = new Date(year, month+1, 0).getDate();
+  let monthTotal  = 0;
+  for (let d=1; d<=lastDay; d++) { const k=dayKey(d); monthTotal += (byDate[k]||[]).reduce((s,b)=>s+(b.valor||0),0); }
+
+  // Montar semanas (Seg=0 … Dom=6)
+  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+  const weeks = [];
+  let wk = new Array(7).fill(null), d = 1;
+  for (let col = firstDow; col < 7 && d <= lastDay; col++) wk[col] = d++;
+  weeks.push([...wk]);
+  while (d <= lastDay) {
+    wk = new Array(7).fill(null);
+    for (let col = 0; col < 7 && d <= lastDay; col++) wk[col] = d++;
+    weeks.push([...wk]);
+  }
+
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const DIAS  = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+
+  const fmtShort = v => v >= 1000 ? (v/1000).toFixed(1)+'k' : String(Math.round(v));
+
+  const weeksHtml = weeks.map(wk => {
+    const wkTotal = wk.reduce((s, d) => d ? s+(byDate[dayKey(d)]||[]).reduce((ss,b)=>ss+(b.valor||0),0) : s, 0);
+    const cells   = wk.map(d => {
+      if (!d) return `<td></td>`;
+      const k    = dayKey(d);
+      const bols = byDate[k] || [];
+      const dt   = new Date(year, month, d);
+      const past = dt < today, isTd = dt.getTime()===today.getTime(), hasBol = bols.length>0;
+      const tot  = bols.reduce((s,b)=>s+(b.valor||0),0);
+
+      let numC='#374151', bg='transparent', valC='#374151', cur='default';
+      if (past)       { numC='#d1d5db'; if(hasBol){bg='#f3f4f6';valC='#9ca3af';cur='pointer';} }
+      else if(isTd)   { numC='#fff';    if(hasBol){bg='#E87820';valC='#fff';    cur='pointer';} else{bg='#E87820';} }
+      else if(hasBol) { numC='#1d4ed8'; bg='#eff6ff'; valC='#1d4ed8'; cur='pointer'; }
+
+      return `<td style="padding:2px 1px;text-align:center">
+        <div onclick="${hasBol?`openFluxoDia('${k}')`:''}"
+             style="background:${bg};border-radius:8px;padding:3px 1px;cursor:${cur};min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px">
+          <span style="font-size:12px;font-weight:${isTd?700:400};color:${numC}">${d}</span>
+          ${hasBol ? `<span style="font-size:9px;font-weight:700;color:${valC};line-height:1.2">R$${fmtShort(tot)}</span>
+                      <span style="font-size:8px;color:${valC};opacity:.8">${bols.length}bol</span>` : ''}
+        </div>
+      </td>`;
+    }).join('');
+
+    const wkCol = wkTotal>0
+      ? `<td style="padding:2px 0 2px 6px;vertical-align:middle;border-left:1px solid #e5e7eb;white-space:nowrap">
+           <span style="font-size:10px;font-weight:700;color:#6b7280">R$${fmtShort(wkTotal)}</span>
+         </td>`
+      : `<td style="border-left:1px solid #e5e7eb"></td>`;
+    return `<tr>${cells}${wkCol}</tr>`;
+  }).join('');
+
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <div style="flex:1;background:#fff7ed;border-radius:10px;padding:10px 12px;border:1px solid #fed7aa">
+        <div style="font-size:10px;color:#9a3412;font-weight:700;letter-spacing:.4px;margin-bottom:2px">A VENCER</div>
+        <div style="font-size:18px;font-weight:800;color:#E87820">R$ ${fmt(totalFuturo)}</div>
+      </div>
+      <div style="flex:1;background:#f9fafb;border-radius:10px;padding:10px 12px;border:1px solid #e5e7eb">
+        <div style="font-size:10px;color:#6b7280;font-weight:700;letter-spacing:.4px;margin-bottom:2px">${MESES[month].toUpperCase()}</div>
+        <div style="font-size:18px;font-weight:800">${monthTotal>0?'R$ '+fmt(monthTotal):'—'}</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <button onclick="fluxoNavMes(-1)" style="background:none;border:1px solid #e5e7eb;border-radius:8px;padding:5px 14px;cursor:pointer;font-size:18px;line-height:1">‹</button>
+      <span style="font-weight:700;font-size:15px">${MESES[month]} ${year}</span>
+      <button onclick="fluxoNavMes(1)"  style="background:none;border:1px solid #e5e7eb;border-radius:8px;padding:5px 14px;cursor:pointer;font-size:18px;line-height:1">›</button>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+      <thead><tr>
+        ${DIAS.map(d=>`<th style="text-align:center;font-size:10px;font-weight:700;color:#9ca3af;padding:0 0 6px;letter-spacing:.3px">${d}</th>`).join('')}
+        <th style="width:40px;border-left:1px solid #e5e7eb"></th>
+      </tr></thead>
+      <tbody>${weeksHtml}</tbody>
+    </table>
+
+    <div id="fluxoDiaDetail" style="display:none;margin-top:14px;border-top:2px solid #e5e7eb;padding-top:12px"></div>`;
+}
+
+function fluxoNavMes(delta) {
+  if (!_fluxoMes) { const t=new Date(); _fluxoMes={year:t.getFullYear(),month:t.getMonth()}; }
+  _fluxoMes.month += delta;
+  if (_fluxoMes.month > 11) { _fluxoMes.month=0; _fluxoMes.year++; }
+  if (_fluxoMes.month < 0)  { _fluxoMes.month=11; _fluxoMes.year--; }
+  const f = document.getElementById('notasTabFluxo');
+  if (f) f.innerHTML = buildFluxoCaixaHtml();
+}
+
+function openFluxoDia(dateKey) {
+  const byDate = _fluxoByDate();
+  const bols   = byDate[dateKey] || [];
+  const el     = document.getElementById('fluxoDiaDetail');
+  if (!el || !bols.length) return;
+
+  const total = bols.reduce((s,b)=>s+(b.valor||0), 0);
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-weight:700;font-size:14px">📅 ${dateKey}</span>
+      <span style="font-weight:700;font-size:14px;color:#E87820">R$ ${fmt(total)}</span>
+    </div>
+    ${bols.map(b=>`
+      <div style="background:#f9fafb;border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid #e5e7eb">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-weight:600;font-size:13px">${escHtml(b.fornecedor)}</span>
+          <span style="font-weight:700">R$ ${fmt(b.valor)}</span>
+        </div>
+        ${b.linha_digitavel
+          ? `<div style="font-family:monospace;font-size:10px;color:#6b7280;word-break:break-all;padding:4px 6px;background:#fff;border-radius:4px;margin-bottom:6px;border:1px solid #e5e7eb">${escHtml(b.linha_digitavel)}</div>
+             <button onclick="copyLinha(this,'${b.linha_digitavel.replace(/'/g,"\\'")}')">📋 Copiar linha</button>`
+          : '<span style="font-size:11px;color:#9ca3af">Sem linha digitável</span>'}
+      </div>`).join('')}
+    <button onclick="document.getElementById('fluxoDiaDetail').style.display='none'"
+            style="font-size:12px;color:#9ca3af;background:none;border:none;cursor:pointer;padding:4px 0">✕ Fechar</button>`;
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function copyLinha(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const prev = btn.textContent;
+    btn.textContent = '✓ Copiado!';
+    btn.style.color = '#16a34a';
+    setTimeout(() => { btn.textContent = prev; btn.style.color = ''; }, 1800);
+  }).catch(() => showToast('Copie manualmente: ' + text.slice(0, 40) + '...'));
+}
