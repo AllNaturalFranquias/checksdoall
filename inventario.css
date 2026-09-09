@@ -3123,3 +3123,19 @@ body { padding-bottom: 62px; }
   border-radius: 6px; padding: 2px 7px; cursor: pointer; font-family: inherit;
 }
 .cmv-nota-add-boleto:hover { background: #f3f4f6; border-color: #d1d5db; }
+
+/* Botões do overlay de boleto (fundo claro) */
+.boleto-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 14px 16px;
+  border-radius: 12px; border: 1.5px solid #e5e7eb;
+  background: #f9fafb; color: #374151;
+  font-family: inherit; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: background 0.12s, border-color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.boleto-btn:active { background: #f3f4f6; }
+.boleto-btn-primary {
+  background: var(--primary); color: #fff; border-color: var(--primary);
+}
+.boleto-btn-primary:active { opacity: 0.85; background: var(--primary); }
