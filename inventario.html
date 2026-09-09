@@ -8,7 +8,7 @@
   <title>Controles Estoque</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="inventario.css?v=29">
+  <link rel="stylesheet" href="inventario.css?v=30">
 </head>
 <body>
 
@@ -110,6 +110,17 @@
     </div>
   </main>
 
+  <!-- Overlay: Cruzamento Fichas × Vendas -->
+  <div class="inv-overlay crz-overlay" id="crzOverlay" style="display:none">
+    <div class="crz-modal">
+      <div class="crz-header">
+        <span class="crz-title">🔬 Fichas × Vendas</span>
+        <button class="crz-close-btn" onclick="closeCruzamento()">✕</button>
+      </div>
+      <div class="crz-steps" id="crzSteps"></div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div class="inv-toast" id="invToast">Salvo ✓</div>
 
@@ -138,6 +149,12 @@
          style="display:none" onchange="handleNFPhoto(this)">
   <input type="file" accept="image/*" id="nfGaleria"
          style="display:none" onchange="handleNFPhoto(this)">
+
+  <!-- Inputs ocultos para Boleto -->
+  <input type="file" accept="image/*" capture="environment" id="boletoCamera"
+         style="display:none" onchange="handleBoletoPhoto(this)">
+  <input type="file" accept="image/*" id="boletoGaleria"
+         style="display:none" onchange="handleBoletoPhoto(this)">
 
   <!-- Modal: Revisão de NF lida por foto -->
   <div class="inv-overlay" id="invNFReviewOverlay">
@@ -498,7 +515,31 @@
     <div class="nota-detail-body" id="relatorioContent"></div>
   </div>
 
+  <!-- Popup: lançar boleto após salvar NF -->
+  <div id="invBoletoPromptOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1200;align-items:center;justify-content:center;padding:16px">
+    <div style="background:#fff;border-radius:16px;padding:24px 20px;max-width:300px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+      <div style="font-size:32px;margin-bottom:8px">🧾</div>
+      <h3 style="margin:0 0 6px;font-size:16px">Lançar boleto(s)?</h3>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 20px">Registre o(s) boleto(s) desta nota para controle de fluxo de caixa.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="inv-modal-btn" onclick="openBoletoCapture()">📸 Sim, lançar boleto</button>
+        <button class="inv-modal-cancel" onclick="closeBoletoPrompt()">Pular</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay fullscreen: captura e revisão de boleto -->
+  <div id="invBoletoOverlay" class="nota-detail-overlay" style="display:none">
+    <div class="nota-detail-header">
+      <button class="nota-detail-back" onclick="closeBoletoOverlay()">← Fechar</button>
+      <span class="nota-detail-title" id="boletoOverlayTitle">Boleto</span>
+      <span></span>
+    </div>
+    <div class="nota-detail-body" id="boletoOverlayContent" style="padding:16px"></div>
+  </div>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="fichas_const.js?v=1"></script>
-  <script src="inventario.js?v=38"></script>
+  <script src="inventario.js?v=40"></script>
 </body>
 </html>
