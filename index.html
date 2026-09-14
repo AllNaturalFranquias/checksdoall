@@ -4,19 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Controles All</title>
+  <title>Estoque — Acesso</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="inventario.css">
 </head>
 <body class="login-body">
 
   <div class="login-container">
-    <div class="login-logo">CONTROLES <span>●</span> ALL</div>
+    <div class="login-logo">ESTOQUE <span>●</span></div>
     <p class="login-subtitle">Selecione sua unidade</p>
-
-    <div class="login-notice">
-      🔑 No primeiro acesso, você deverá criar seu nome e PIN pessoal antes de entrar.
-    </div>
 
     <div class="login-units">
       <button class="login-unit-btn" onclick="selectUnit('batel')">Batel</button>
@@ -24,105 +20,51 @@
       <button class="login-unit-btn" onclick="selectUnit('parkshopping')">Park Shopping</button>
       <button class="login-unit-btn" onclick="selectUnit('bigorrilho')">Bigorrilho</button>
       <button class="login-unit-btn login-unit-btn-cascavel" onclick="selectUnit('cascavel')">Cascavel <span class="login-em-breve">Em breve</span></button>
+      <button class="login-unit-btn" onclick="selectUnit('cozinhacentral')" style="grid-column:1/-1;background:#6d28d9;color:#fff;border-color:#6d28d9;">🏭 Cozinha Central</button>
     </div>
 
-    <button class="login-resumo-btn" onclick="selectUnit('global')">🏢 Franqueadora</button>
+    <button class="login-resumo-btn" onclick="selectUnit('global')">📊 Painel Geral — Dono</button>
   </div>
 
-  <!-- Modal: Login com PIN -->
+  <!-- PIN Modal -->
   <div class="inv-overlay" id="pinOverlay">
-
-    <!-- Passo 1: digitar PIN atual -->
-    <div class="inv-modal" id="pinModalContent">
-      <h2 id="pinTitle">Acesso</h2>
-      <p id="pinSubtitle">Digite seu PIN para entrar</p>
+    <div class="inv-modal">
+      <h2 id="pinTitle">Acesso Admin</h2>
+      <p id="pinSubtitle">Digite o PIN para entrar como admin</p>
       <input class="inv-pin-input" id="pinInput" type="password"
              inputmode="numeric" maxlength="4" autocomplete="off"
              onkeydown="if(event.key==='Enter')doLogin()">
-      <button class="inv-modal-btn" onclick="doLogin()">Entrar</button>
-      <button class="inv-modal-cancel" onclick="cancelLogin()">↩ Voltar</button>
+      <button class="inv-modal-btn" onclick="doLogin()">Entrar como Admin</button>
+      <button class="inv-modal-cancel" id="skipBtn" onclick="goEmployee()">Entrar sem PIN (só contagem)</button>
+      <button class="inv-modal-cancel" onclick="cancelLogin()" style="color:#bbb;margin-top:4px">↩ Voltar</button>
     </div>
-
-    <!-- Passo 2: criar nome e PIN pessoal (obrigatório se PIN ainda é padrão) -->
-    <div class="inv-modal" id="changePinContent" style="display:none">
-      <h2 id="changePinTitle">Criar acesso pessoal</h2>
-      <p id="changePinSubtitle" style="font-size:13px;color:#666;margin-bottom:16px"></p>
-      <div class="nota-field">
-        <label>Seu nome</label>
-        <input id="newNome" type="text" placeholder="Ex: Bruna" autocomplete="off"
-               style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-family:inherit;font-size:15px"
-               onkeydown="if(event.key==='Enter')document.getElementById('newPin1').focus()">
-      </div>
-      <div class="nota-field" style="margin-top:10px">
-        <label>Novo PIN (4 dígitos)</label>
-        <input class="inv-pin-input" id="newPin1" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off">
-      </div>
-      <div class="nota-field" style="margin-top:10px">
-        <label>Confirmar PIN</label>
-        <input class="inv-pin-input" id="newPin2" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off"
-               onkeydown="if(event.key==='Enter')saveNewPin()">
-      </div>
-      <p id="pinChangeError" style="color:#e11d48;font-size:12px;min-height:18px;margin-top:6px"></p>
-      <button class="inv-modal-btn" onclick="saveNewPin()">Salvar e Entrar</button>
-      <button class="inv-modal-cancel" id="btnSkipPin" onclick="doRedirect()" style="display:none">Agora não</button>
-    </div>
-
   </div>
 
   <script>
-    const SUPABASE_URL = 'https://nhuotdwfzowydrjeyttc.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5odW90ZHdmem93eWRyamV5dHRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTM2NDAsImV4cCI6MjA5NTk4OTY0MH0.JovSWvkJ5OdX1tauz7sYOuyDIm1Mbcx5gJF8Zb20oe4';
-
-    const DEFAULT_PINS = ['1111','2222','1234'];
-
-    let UNIT_ADMINS = {
-      global:       [{ nome: 'Kauê',    pin: '1234' }],
-      batel:        [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }, { nome: 'Kauê', pin: '1234' }],
-      maringa:      [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
-      parkshopping: [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
-      bigorrilho:   [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
-      cascavel:     [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
+    // ── ATENÇÃO: mantenha estes PINs iguais aos do inventario.js ──
+    const UNIT_ADMINS = {
+      global:       [{ nome: 'Kauê',              pin: '1234' }],
+      batel:        [{ nome: 'Admin Batel 1',     pin: '1111' }, { nome: 'Admin Batel 2',     pin: '2222' }],
+      maringa:      [{ nome: 'Admin Maringá 1',   pin: '3333' }, { nome: 'Admin Maringá 2',   pin: '4444' }],
+      parkshopping: [{ nome: 'Admin Park 1',      pin: '5555' }, { nome: 'Admin Park 2',      pin: '6666' }],
+      bigorrilho:   [{ nome: 'Admin Bigo. 1',     pin: '7777' }, { nome: 'Admin Bigo. 2',     pin: '8888' }],
+      cascavel:       [{ nome: 'Admin Cascavel 1',  pin: '9999' }, { nome: 'Admin Cascavel 2',  pin: '0000' }],
+      cozinhacentral: [{ nome: 'Admin Fábrica 1',  pin: '2121' }, { nome: 'Admin Fábrica 2',  pin: '3131' }],
     };
     const UNIT_LABELS = {
-      batel:'Batel', maringa:'Maringá', parkshopping:'Park Shopping',
-      bigorrilho:'Bigorrilho', cascavel:'Cascavel', global:'Painel Geral'
+      batel: 'Batel', maringa: 'Maringá', parkshopping: 'Park Shopping',
+      bigorrilho: 'Bigorrilho', cascavel: 'Cascavel', cozinhacentral: 'Cozinha Central', global: 'Painel Geral'
     };
 
     let selectedUnit = null;
-    let loggedAdmin  = null;
-
-    async function loadPins() {
-      try {
-        const r = await fetch(
-          `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.config_pins&select=estado`,
-          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-        );
-        const rows = await r.json();
-        if (rows?.[0]?.estado) Object.assign(UNIT_ADMINS, rows[0].estado);
-      } catch(e) {}
-    }
-
-    async function savePins() {
-      const body = JSON.stringify({ chave: 'config_pins', estado: UNIT_ADMINS });
-      await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
-        method: 'POST',
-        headers: {
-          apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates'
-        },
-        body
-      });
-    }
-
-    loadPins();
 
     function selectUnit(unit) {
       selectedUnit = unit;
       document.getElementById('pinTitle').textContent = UNIT_LABELS[unit] || unit;
-      document.getElementById('pinSubtitle').textContent = 'Digite seu PIN para entrar';
+      document.getElementById('pinSubtitle').textContent = 'Digite o PIN para entrar como admin';
       document.getElementById('pinInput').value = '';
       document.getElementById('pinInput').classList.remove('error');
-      showModal('pinModalContent');
+      document.getElementById('skipBtn').style.display = unit === 'global' ? 'none' : 'block';
       document.getElementById('pinOverlay').classList.add('open');
       setTimeout(() => document.getElementById('pinInput').focus(), 100);
     }
@@ -133,32 +75,14 @@
       const admin  = admins.find(a => a.pin === pin);
 
       if (admin) {
-        loggedAdmin = admin;
         const isGlobal = selectedUnit === 'global';
         sessionStorage.setItem('inv_session', JSON.stringify({
-          nome: admin.nome, unidade: isGlobal ? null : selectedUnit,
-          isAdmin: true, isGlobal
+          nome:    admin.nome,
+          unidade: isGlobal ? null : selectedUnit,
+          isAdmin: true,
+          isGlobal
         }));
-
-        const isPinDefault = DEFAULT_PINS.includes(admin.pin);
-        if (!isPinDefault) {
-          // PIN já personalizado: entra direto
-          doRedirect();
-          return;
-        }
-
-        // PIN padrão: troca obrigatória antes de entrar
-        document.getElementById('changePinTitle').textContent = 'Criar acesso pessoal';
-        document.getElementById('changePinSubtitle').textContent =
-          'Antes de entrar, defina seu nome e escolha um PIN pessoal.';
-        document.getElementById('btnSkipPin').style.display = 'none';
-        document.getElementById('newNome').value = '';
-        document.getElementById('newPin1').value = '';
-        document.getElementById('newPin2').value = '';
-        document.getElementById('pinChangeError').textContent = '';
-        document.getElementById('pinChangeError').style.color = '#e11d48';
-        showModal('changePinContent');
-        setTimeout(() => document.getElementById('newNome').focus(), 100);
+        window.location.href = isGlobal ? 'resumo.html' : 'inventario.html?u=' + selectedUnit;
       } else {
         const inp = document.getElementById('pinInput');
         inp.classList.add('error');
@@ -167,62 +91,15 @@
       }
     }
 
-    function doRedirect() {
-      const isGlobal = selectedUnit === 'global';
-      window.location.href = isGlobal ? 'resumo.html' : 'inventario.html?u=' + selectedUnit;
-    }
-
-    async function saveNewPin() {
-      const nome = document.getElementById('newNome').value.trim();
-      const p1   = document.getElementById('newPin1').value;
-      const p2   = document.getElementById('newPin2').value;
-      const err  = document.getElementById('pinChangeError');
-
-      if (!nome)                { err.textContent = 'Digite seu nome'; return; }
-      if (p1.length < 4)       { err.textContent = 'PIN deve ter 4 dígitos'; return; }
-      if (p1 !== p2)           { err.textContent = 'Os PINs não coincidem'; return; }
-      if (!/^\d{4}$/.test(p1)) { err.textContent = 'Use apenas números'; return; }
-      if (DEFAULT_PINS.includes(p1)) { err.textContent = 'Escolha um PIN diferente do padrão'; return; }
-
-      const admins = UNIT_ADMINS[selectedUnit] || [];
-      const idx = admins.findIndex(a => a.nome === loggedAdmin.nome);
-      if (idx !== -1) { admins[idx].pin = p1; admins[idx].nome = nome; }
-
-      const session = JSON.parse(sessionStorage.getItem('inv_session') || '{}');
-      session.nome = nome;
-      sessionStorage.setItem('inv_session', JSON.stringify(session));
-
-      await savePins();
-      err.style.color = '#16a34a';
-      err.textContent = `Tudo certo, ${nome}! Entrando...`;
-      setTimeout(doRedirect, 1000);
+    function goEmployee() {
+      sessionStorage.removeItem('inv_session');
+      window.location.href = 'inventario.html?u=' + selectedUnit;
     }
 
     function cancelLogin() {
       document.getElementById('pinOverlay').classList.remove('open');
       selectedUnit = null;
-      loggedAdmin  = null;
-    }
-
-    function showModal(id) {
-      ['pinModalContent','changePinContent'].forEach(m => {
-        document.getElementById(m).style.display = m === id ? 'block' : 'none';
-      });
     }
   </script>
-
-  <style>
-    .login-notice {
-      background: #fef9c3;
-      border: 1px solid #fde047;
-      color: #713f12;
-      font-size: 13px;
-      line-height: 1.5;
-      padding: 10px 14px;
-      border-radius: 8px;
-      margin-bottom: 18px;
-      text-align: center;
-    }
-  </style>
 </body>
 </html>
