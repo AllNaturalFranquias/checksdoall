@@ -54,7 +54,7 @@ const IS_ADMIN = Boolean(_session && _session.isAdmin && (
 // ── PINs de admin por unidade ─────────────────────────────────
 let UNIT_ADMINS = {
   global: [
-    { nome: 'Kauê',        pin: '1234' },
+    { nome: 'Kauê',        pin: '2009' },
     { nome: 'Supervisora', pin: '3333', units: ['bigorrilho', 'parkshopping'] },
   ],
   batel:        [{ nome: 'Admin 1', pin: '1111' }, { nome: 'Admin 2', pin: '2222' }],
