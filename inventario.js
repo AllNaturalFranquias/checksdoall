@@ -576,21 +576,12 @@ const BASE_SECTIONS_CC = [
         items: [
           { name: 'Mignon Cubos (Limpo)', unit: 'kg' },
           { name: 'Carne Moída Primeira', unit: 'kg' },
-          { name: 'Carne Posta Vermelha', unit: 'kg' },
         ]
       },
       {
         group: 'Peixes',
         items: [
-          { name: 'Tilápia Crua', unit: 'kg' },
-        ]
-      },
-      {
-        group: 'Embutidos / Suínos',
-        items: [
-          { name: 'Bacon Manta Feijoada', unit: 'kg' },
-          { name: 'Calabresa', unit: 'kg' },
-          { name: 'Costelinha', unit: 'kg' },
+          { name: 'Tilápia', unit: 'kg' },
         ]
       },
     ]
@@ -603,14 +594,13 @@ const BASE_SECTIONS_CC = [
         group: 'Legumes',
         items: [
           { name: 'Abobrinha', unit: 'kg' },
-          { name: 'Abóbora Crua', unit: 'kg' },
+          { name: 'Abóbora', unit: 'kg' },
           { name: 'Berinjela', unit: 'kg' },
           { name: 'Brócolis', unit: 'kg' },
           { name: 'Cenoura', unit: 'kg' },
-          { name: 'Couve-Flor', unit: 'kg' },
           { name: 'Cogumelos Paris', unit: 'kg' },
-          { name: 'Pepino Conserva', unit: 'kg' },
-          { name: 'Milho', unit: 'kg' },
+          { name: 'Couve-Flor', unit: 'kg' },
+          { name: 'Repolho Roxo', unit: 'kg' },
         ]
       },
       {
@@ -618,25 +608,19 @@ const BASE_SECTIONS_CC = [
         items: [
           { name: 'Alho', unit: 'kg' },
           { name: 'Cebola', unit: 'kg' },
-          { name: 'Cebola Roxa', unit: 'kg' },
+          { name: 'Limão', unit: 'kg' },
           { name: 'Manjericão', unit: 'mc' },
-          { name: 'Cebolinha', unit: 'mc' },
-          { name: 'Salsinha', unit: 'mc' },
-          { name: 'Couve', unit: 'mc' },
         ]
       },
       {
-        group: 'Tubérculos e Frutas',
+        group: 'Tubérculos e Raízes',
         items: [
           { name: 'Aipim (Mandioca)', unit: 'kg' },
           { name: 'Batata', unit: 'kg' },
           { name: 'Batata Doce', unit: 'kg' },
-          { name: 'Abacate', unit: 'kg' },
-          { name: 'Tomate Italiano', unit: 'kg' },
-          { name: 'Tomate Cereja', unit: 'kg' },
-          { name: 'Tomate Pelado', unit: 'kg' },
-          { name: 'Limão', unit: 'kg' },
           { name: 'Pupunha Laminada', unit: 'kg' },
+          { name: 'Pupunha Spaghetti', unit: 'kg' },
+          { name: 'Tomate Pelado', unit: 'kg' },
         ]
       },
     ]
@@ -646,7 +630,7 @@ const BASE_SECTIONS_CC = [
     label: 'LATICÍNIOS',
     groups: [
       {
-        group: 'Laticínios Zero Lactose',
+        group: 'Zero Lactose',
         items: [
           { name: 'Creme de Leite Zero Lactose', unit: 'kg' },
           { name: 'Iogurte Natural Zero Lactose', unit: 'kg' },
@@ -654,18 +638,16 @@ const BASE_SECTIONS_CC = [
         ]
       },
       {
-        group: 'Queijos',
+        group: 'Queijos e Derivados',
         items: [
           { name: 'Ricota', unit: 'kg' },
           { name: 'Parmesão', unit: 'kg' },
-          { name: 'Muçarela Búfala', unit: 'kg' },
-          { name: 'Gorgonzola', unit: 'kg' },
+          { name: 'Requeijão Light', unit: 'kg' },
         ]
       },
       {
         group: 'Outros',
         items: [
-          { name: 'Maionese', unit: 'kg' },
           { name: 'Manteiga', unit: 'kg' },
           { name: 'Ovos', unit: '30 un' },
           { name: 'Leite de Coco', unit: 'litro' },
@@ -678,21 +660,13 @@ const BASE_SECTIONS_CC = [
     label: 'SECOS',
     groups: [
       {
-        group: 'Grãos',
+        group: 'Farinhas e Panificação',
         items: [
-          { name: 'Arroz Integral', unit: 'kg' },
-          { name: 'Feijão Preto', unit: 'kg' },
-        ]
-      },
-      {
-        group: 'Farinhas e Massas',
-        items: [
-          { name: 'Farinha de Mandioca', unit: 'kg' },
           { name: 'Farelo de Aveia', unit: 'kg' },
-          { name: 'Trigo', unit: 'kg' },
-          { name: 'Tapioca', unit: 'kg' },
+          { name: 'Farinha de Linhaça', unit: 'kg' },
           { name: 'Pão Integral', unit: 'kg' },
-          { name: 'Macarrão Parafuso Integral', unit: 'kg' },
+          { name: 'Tapioca', unit: 'kg' },
+          { name: 'Trigo', unit: 'kg' },
         ]
       },
       {
@@ -701,16 +675,12 @@ const BASE_SECTIONS_CC = [
           { name: 'Amêndoa Laminada', unit: 'kg' },
           { name: 'Linhaça', unit: 'kg' },
           { name: 'Semente de Girassol', unit: 'kg' },
-          { name: 'Chia', unit: 'kg' },
-          { name: 'Nozes', unit: 'kg' },
-          { name: 'Amendoim Torrado', unit: 'kg' },
         ]
       },
       {
         group: 'Outros Secos',
         items: [
           { name: 'Açúcar Demerara', unit: 'kg' },
-          { name: 'Farinha de Rosca', unit: 'kg' },
         ]
       },
     ]
@@ -727,30 +697,26 @@ const BASE_SECTIONS_CC = [
         ]
       },
       {
-        group: 'Molhos e Bases',
+        group: 'Bases e Molhos',
         items: [
+          { name: 'Balsâmico', unit: 'litro' },
+          { name: 'Conhaque', unit: 'litro' },
           { name: 'Extrato de Tomate', unit: 'kg' },
-          { name: 'Mostarda Amarela', unit: 'kg' },
+          { name: 'Maionese', unit: 'kg' },
           { name: 'Mel', unit: 'kg' },
           { name: 'Molho Inglês', unit: 'litro' },
-          { name: 'Balsâmico', unit: 'litro' },
-          { name: 'Vinagre Vinho Tinto', unit: 'litro' },
-          { name: 'Conhaque', unit: 'litro' },
+          { name: 'Mostarda Amarela', unit: 'kg' },
         ]
       },
       {
         group: 'Temperos',
         items: [
-          { name: 'Sal', unit: 'kg' },
-          { name: 'Pimenta do Reino', unit: 'kg' },
-          { name: 'Orégano', unit: 'kg' },
-          { name: 'Paprica Defumada', unit: 'kg' },
-          { name: 'Páprica Doce', unit: 'kg' },
-          { name: 'Louro', unit: 'kg' },
           { name: 'Ervas Finas', unit: 'kg' },
+          { name: 'Louro', unit: 'kg' },
+          { name: 'Orégano', unit: 'kg' },
+          { name: 'Pimenta do Reino', unit: 'kg' },
+          { name: 'Sal', unit: 'kg' },
           { name: 'Tempero All', unit: 'kg' },
-          { name: 'Noz Moscada', unit: 'kg' },
-          { name: 'Lemon Pepper', unit: 'kg' },
         ]
       },
     ]
