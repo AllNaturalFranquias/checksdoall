@@ -868,7 +868,7 @@ function updateSavedLabel() {
 // ── Construção de tabs ────────────────────────────────────────
 function buildTabs() {
   const nav = document.getElementById('invTabs');
-  nav.innerHTML = SECTIONS.filter(s => s.key !== 'CMV').map(s => `
+  nav.innerHTML = SECTIONS.filter(s => s.key !== 'CMV' && s.key !== 'PRODUCAO').map(s => `
     <button class="inv-tab" data-key="${s.key}" onclick="switchTab('${s.key}')">
       ${s.label}
       ${s.key !== 'RESUMO' ? `<span class="inv-tab-badge" id="badge_${s.key}">0</span>` : ''}
@@ -886,7 +886,7 @@ function renderContagemDash() {
   const sectionStats = [];
 
   for (const section of SECTIONS) {
-    if (section.key === 'RESUMO' || section.key === 'CMV') continue;
+    if (section.key === 'RESUMO' || section.key === 'CMV' || section.key === 'PRODUCAO') continue;
     const sData = (state.data[section.key] || {})[weekKey] || {};
     let started = 0, completed = 0, total = 0;
     for (const g of section.groups) {
