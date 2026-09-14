@@ -36,7 +36,7 @@ async function saveGeminiKeyToCloud(key) {
 
 // ── Unidade (via URL ?u=batel) ────────────────────────────────
 const UNIT_ID    = new URLSearchParams(location.search).get('u') || 'batel';
-const UNIT_NAMES = { batel:'Batel', maringa:'Maringá', parkshopping:'Park Shopping', bigorrilho:'Bigorrilho', cascavel:'Cascavel' };
+const UNIT_NAMES = { batel:'Batel', maringa:'Maringá', parkshopping:'Park Shopping', bigorrilho:'Bigorrilho', cascavel:'Cascavel', cozinhacentral:'Cozinha Central' };
 const UNIT_NAME  = UNIT_NAMES[UNIT_ID] || UNIT_ID;
 const LOCAL_KEY  = 'inventario_' + UNIT_ID + '_v1';
 const CLOUD_DADOS = 'dados_' + UNIT_ID;
@@ -503,8 +503,272 @@ const BASE_SECTIONS = [
   }
 ];
 
+// ── Seções exclusivas — Cozinha Central ──────────────────────
+const BASE_SECTIONS_CC = [
+  {
+    key: 'EXPEDICAO',
+    label: 'EXPEDIÇÃO',
+    groups: [
+      {
+        group: 'Proteínas e Pratos Prontos',
+        items: [
+          { name: 'Lasanha Bolonhesa', unit: 'un' },
+          { name: 'Lasanha Vegetariana', unit: 'un' },
+          { name: 'Strogonoff Frango', unit: 'pct 2kg' },
+          { name: 'Strogonoff Mignon', unit: 'pct 2kg' },
+          { name: 'Tilápia', unit: 'pct 1,2kg' },
+          { name: 'Frango Desfiado', unit: 'kg' },
+          { name: 'Filé Frango Parmegiana', unit: 'pct 1,2kg' },
+        ]
+      },
+      {
+        group: 'Vegetais e Acompanhamentos',
+        items: [
+          { name: 'Cogumelo', unit: 'kg' },
+          { name: 'Abóbora', unit: 'kg' },
+          { name: 'Mandioca', unit: 'kg' },
+          { name: 'Spaghetti de Vegetais', unit: 'pct 1,16kg' },
+          { name: 'Spaghetti Vegetais Yakissoba', unit: 'pct 0,58kg' },
+        ]
+      },
+      {
+        group: 'Snacks',
+        items: [
+          { name: 'Tortinha de Legumes', unit: 'pct 6un' },
+          { name: 'Tortinha de Frango', unit: 'pct 6un' },
+          { name: 'Coxinha', unit: 'pct 10un' },
+          { name: 'Palitinho de Tapioca', unit: 'pct 10 porções' },
+        ]
+      },
+      {
+        group: 'Granéis e Croutons',
+        items: [
+          { name: 'Batata Palha', unit: 'pct 3kg' },
+          { name: 'Batata Chips', unit: 'kg' },
+          { name: 'Croutons', unit: 'kg' },
+          { name: 'Mix de Sementes e Amêndoas', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Molhos',
+        items: [
+          { name: 'Molho Pomodoro', unit: 'kg' },
+          { name: 'Molho Ranch', unit: 'kg' },
+          { name: 'Mostarda e Mel', unit: 'kg' },
+          { name: 'Molho Golf', unit: 'kg' },
+          { name: 'Balsâmico com Mostarda', unit: 'kg' },
+        ]
+      },
+    ]
+  },
+  {
+    key: 'PROTEINAS_CC',
+    label: 'PROTEÍNAS',
+    groups: [
+      {
+        group: 'Aves',
+        items: [
+          { name: 'File de Peito de Frango', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Bovinos',
+        items: [
+          { name: 'Mignon Cubos (Limpo)', unit: 'kg' },
+          { name: 'Carne Moída Primeira', unit: 'kg' },
+          { name: 'Carne Posta Vermelha', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Peixes',
+        items: [
+          { name: 'Tilápia Crua', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Embutidos / Suínos',
+        items: [
+          { name: 'Bacon Manta Feijoada', unit: 'kg' },
+          { name: 'Calabresa', unit: 'kg' },
+          { name: 'Costelinha', unit: 'kg' },
+        ]
+      },
+    ]
+  },
+  {
+    key: 'HORTI_CC',
+    label: 'HORTI',
+    groups: [
+      {
+        group: 'Legumes',
+        items: [
+          { name: 'Abobrinha', unit: 'kg' },
+          { name: 'Abóbora Crua', unit: 'kg' },
+          { name: 'Berinjela', unit: 'kg' },
+          { name: 'Brócolis', unit: 'kg' },
+          { name: 'Cenoura', unit: 'kg' },
+          { name: 'Couve-Flor', unit: 'kg' },
+          { name: 'Cogumelos Paris', unit: 'kg' },
+          { name: 'Pepino Conserva', unit: 'kg' },
+          { name: 'Milho', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Aromáticos',
+        items: [
+          { name: 'Alho', unit: 'kg' },
+          { name: 'Cebola', unit: 'kg' },
+          { name: 'Cebola Roxa', unit: 'kg' },
+          { name: 'Manjericão', unit: 'mc' },
+          { name: 'Cebolinha', unit: 'mc' },
+          { name: 'Salsinha', unit: 'mc' },
+          { name: 'Couve', unit: 'mc' },
+        ]
+      },
+      {
+        group: 'Tubérculos e Frutas',
+        items: [
+          { name: 'Aipim (Mandioca)', unit: 'kg' },
+          { name: 'Batata', unit: 'kg' },
+          { name: 'Batata Doce', unit: 'kg' },
+          { name: 'Abacate', unit: 'kg' },
+          { name: 'Tomate Italiano', unit: 'kg' },
+          { name: 'Tomate Cereja', unit: 'kg' },
+          { name: 'Tomate Pelado', unit: 'kg' },
+          { name: 'Limão', unit: 'kg' },
+          { name: 'Pupunha Laminada', unit: 'kg' },
+        ]
+      },
+    ]
+  },
+  {
+    key: 'LATIC_CC',
+    label: 'LATICÍNIOS',
+    groups: [
+      {
+        group: 'Laticínios Zero Lactose',
+        items: [
+          { name: 'Creme de Leite Zero Lactose', unit: 'kg' },
+          { name: 'Iogurte Natural Zero Lactose', unit: 'kg' },
+          { name: 'Leite Desnatado', unit: 'litro' },
+        ]
+      },
+      {
+        group: 'Queijos',
+        items: [
+          { name: 'Ricota', unit: 'kg' },
+          { name: 'Parmesão', unit: 'kg' },
+          { name: 'Muçarela Búfala', unit: 'kg' },
+          { name: 'Gorgonzola', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Outros',
+        items: [
+          { name: 'Maionese', unit: 'kg' },
+          { name: 'Manteiga', unit: 'kg' },
+          { name: 'Ovos', unit: '30 un' },
+          { name: 'Leite de Coco', unit: 'litro' },
+        ]
+      },
+    ]
+  },
+  {
+    key: 'SECOS_CC',
+    label: 'SECOS',
+    groups: [
+      {
+        group: 'Grãos',
+        items: [
+          { name: 'Arroz Integral', unit: 'kg' },
+          { name: 'Feijão Preto', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Farinhas e Massas',
+        items: [
+          { name: 'Farinha de Mandioca', unit: 'kg' },
+          { name: 'Farelo de Aveia', unit: 'kg' },
+          { name: 'Trigo', unit: 'kg' },
+          { name: 'Tapioca', unit: 'kg' },
+          { name: 'Pão Integral', unit: 'kg' },
+          { name: 'Macarrão Parafuso Integral', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Nuts e Sementes',
+        items: [
+          { name: 'Amêndoa Laminada', unit: 'kg' },
+          { name: 'Linhaça', unit: 'kg' },
+          { name: 'Semente de Girassol', unit: 'kg' },
+          { name: 'Chia', unit: 'kg' },
+          { name: 'Nozes', unit: 'kg' },
+          { name: 'Amendoim Torrado', unit: 'kg' },
+        ]
+      },
+      {
+        group: 'Outros Secos',
+        items: [
+          { name: 'Açúcar Demerara', unit: 'kg' },
+          { name: 'Farinha de Rosca', unit: 'kg' },
+        ]
+      },
+    ]
+  },
+  {
+    key: 'CONDIMT_CC',
+    label: 'CONDIMT.',
+    groups: [
+      {
+        group: 'Óleos e Azeites',
+        items: [
+          { name: 'Azeite de Oliva', unit: 'litro' },
+          { name: 'Óleo de Algodão', unit: 'litro' },
+        ]
+      },
+      {
+        group: 'Molhos e Bases',
+        items: [
+          { name: 'Extrato de Tomate', unit: 'kg' },
+          { name: 'Mostarda Amarela', unit: 'kg' },
+          { name: 'Mel', unit: 'kg' },
+          { name: 'Molho Inglês', unit: 'litro' },
+          { name: 'Balsâmico', unit: 'litro' },
+          { name: 'Vinagre Vinho Tinto', unit: 'litro' },
+          { name: 'Conhaque', unit: 'litro' },
+        ]
+      },
+      {
+        group: 'Temperos',
+        items: [
+          { name: 'Sal', unit: 'kg' },
+          { name: 'Pimenta do Reino', unit: 'kg' },
+          { name: 'Orégano', unit: 'kg' },
+          { name: 'Paprica Defumada', unit: 'kg' },
+          { name: 'Páprica Doce', unit: 'kg' },
+          { name: 'Louro', unit: 'kg' },
+          { name: 'Ervas Finas', unit: 'kg' },
+          { name: 'Tempero All', unit: 'kg' },
+          { name: 'Noz Moscada', unit: 'kg' },
+          { name: 'Lemon Pepper', unit: 'kg' },
+        ]
+      },
+    ]
+  },
+  {
+    key: 'CMV',
+    label: 'CMV',
+    groups: []
+  },
+  {
+    key: 'RESUMO',
+    label: 'RESUMO',
+    groups: []
+  }
+];
+
 // SECTIONS é a versão aplicada da unidade (base + customizações)
-let SECTIONS = BASE_SECTIONS.slice();
+let SECTIONS = UNIT_ID === 'cozinhacentral' ? BASE_SECTIONS_CC.slice() : BASE_SECTIONS.slice();
 
 // ── Estado ────────────────────────────────────────────────────
 let state = {
@@ -1997,7 +2261,8 @@ function applyUnitConfig() {
   const added   = unitConfig.added   || {};
   const deleted = unitConfig.deleted || {};
 
-  SECTIONS = BASE_SECTIONS.map(section => {
+  const _BASE = UNIT_ID === 'cozinhacentral' ? BASE_SECTIONS_CC : BASE_SECTIONS;
+  SECTIONS = _BASE.map(section => {
     if (section.key === 'CMV' || section.key === 'RESUMO') return section;
 
     const sAdded   = added[section.key]   || [];
