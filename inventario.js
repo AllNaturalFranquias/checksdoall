@@ -596,11 +596,8 @@ const BASE_SECTIONS_CC = [
           { name: 'Abobrinha', unit: 'kg' },
           { name: 'Abóbora', unit: 'kg' },
           { name: 'Berinjela', unit: 'kg' },
-          { name: 'Brócolis', unit: 'kg' },
           { name: 'Cenoura', unit: 'kg' },
           { name: 'Cogumelos Paris', unit: 'kg' },
-          { name: 'Couve-Flor', unit: 'kg' },
-          { name: 'Repolho Roxo', unit: 'kg' },
         ]
       },
       {
@@ -608,15 +605,16 @@ const BASE_SECTIONS_CC = [
         items: [
           { name: 'Alho', unit: 'kg' },
           { name: 'Cebola', unit: 'kg' },
+          { name: 'Cebolinha', unit: 'mc' },
           { name: 'Limão', unit: 'kg' },
           { name: 'Manjericão', unit: 'mc' },
+          { name: 'Salsinha', unit: 'mc' },
         ]
       },
       {
         group: 'Tubérculos e Raízes',
         items: [
           { name: 'Aipim (Mandioca)', unit: 'kg' },
-          { name: 'Batata', unit: 'kg' },
           { name: 'Batata Doce', unit: 'kg' },
           { name: 'Pupunha Laminada', unit: 'kg' },
           { name: 'Pupunha Spaghetti', unit: 'kg' },
@@ -633,7 +631,7 @@ const BASE_SECTIONS_CC = [
         group: 'Zero Lactose',
         items: [
           { name: 'Creme de Leite Zero Lactose', unit: 'kg' },
-          { name: 'Iogurte Natural Zero Lactose', unit: 'kg' },
+          { name: 'Iogurte Natural Desnatado', unit: 'kg' },
           { name: 'Leite Desnatado', unit: 'litro' },
         ]
       },
