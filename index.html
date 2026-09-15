@@ -86,7 +86,7 @@
 
     function doLogin() {
       const pin    = document.getElementById('pinInput').value;
-      const admins = UNIT_ADMINS[selectedUnit] || [];
+      const admins = [...(UNIT_ADMINS[selectedUnit] || []), ...(selectedUnit !== 'global' ? (UNIT_ADMINS.global || []) : [])];
       const admin  = admins.find(a => a.pin === pin);
 
       if (admin) {
