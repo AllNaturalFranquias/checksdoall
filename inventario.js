@@ -51,6 +51,13 @@ const IS_ADMIN = Boolean(_session && _session.isAdmin && (
   (_session.units && _session.units.includes(UNIT_ID))
 ));
 
+// ── PIN LOJA (acesso restrito: Contagem + Etiquetas + Checklist) ──
+const IS_LOJA = Boolean(_session && _session.isLoja && _session.unidade === UNIT_ID);
+
+// ── Feature flag: módulo de Etiquetas — teste isolado, só Batel ──
+const ETIQUETAS_ENABLED = (UNIT_ID === 'batel');
+const CHECKLIST_URL = ''; // TODO: colar aqui a URL pública do checklist/index.html (Batel) — Kauê precisa confirmar
+
 // ── PINs de admin por unidade ─────────────────────────────────
 let UNIT_ADMINS = {
   global: [
@@ -875,7 +882,7 @@ async function init() {
   const unitNameEl = document.getElementById('invUnitName');
   if (unitNameEl) unitNameEl.textContent = UNIT_NAME;
 
-  if (IS_ADMIN) {
+  if (IS_ADMIN || IS_LOJA) {
     const logoutBtn = document.getElementById('invLogoutBtn');
     if (logoutBtn) {
       logoutBtn.style.display = 'inline-flex';
@@ -904,6 +911,7 @@ async function init() {
     const dreBtn = document.querySelector('[data-view="dre"]');
     if (dreBtn) dreBtn.style.display = 'none';
   }
+  setupEtiquetasNav();
   await loadFromCloud();
   // Corrige semana novamente caso cloud tenha sobrescrito com formato antigo
   if (!state.semana || !/^\d{4}-W\d{2}$/.test(String(state.semana))) {
@@ -915,12 +923,16 @@ async function init() {
 
 // ── Views (bottom nav) ────────────────────────────────────────
 
+const LOJA_ALLOWED_VIEWS = ['dashboard', 'contagem', 'etiquetas'];
+
 function switchView(view) {
   if (view === 'dre' && !IS_ADMIN) return;
+  if (view === 'etiquetas' && !ETIQUETAS_ENABLED) return;
+  if (IS_LOJA && !LOJA_ALLOWED_VIEWS.includes(view)) return;
   document.querySelectorAll('.app-nav-item').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.view === view));
 
-  ['dashboard','contagem','cmv','notas','config','comparativo','dre'].forEach(v => {
+  ['dashboard','contagem','cmv','notas','config','comparativo','dre','etiquetas'].forEach(v => {
     const el = document.getElementById('view-' + v);
     if (el) el.style.display = v === view ? '' : 'none';
   });
@@ -938,6 +950,7 @@ function switchView(view) {
   if (view === 'config')      renderConfigView();
   if (view === 'comparativo') renderComparativo();
   if (view === 'dre')         renderDRE();
+  if (view === 'etiquetas')   renderEtiquetas();
 }
 
 function renderDashboard() {
@@ -1091,6 +1104,41 @@ function updateSavedLabel() {
     const d = new Date(state.lastSaved);
     el.textContent = 'Salvo ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
+}
+
+// ── Nav do módulo de Etiquetas (feature flag Batel-only + PIN LOJA) ──
+function setupEtiquetasNav() {
+  const bottomNav = document.getElementById('appBottomNav');
+  if (!bottomNav) return;
+
+  if (ETIQUETAS_ENABLED) {
+    const configBtn = bottomNav.querySelector('[data-view="config"]');
+
+    const etiquetasBtn = document.createElement('button');
+    etiquetasBtn.className = 'app-nav-item';
+    etiquetasBtn.dataset.view = 'etiquetas';
+    etiquetasBtn.setAttribute('onclick', "switchView('etiquetas')");
+    etiquetasBtn.innerHTML = `<span class="app-nav-icon">🏷️</span><span class="app-nav-label">Etiquetas</span>`;
+    bottomNav.insertBefore(etiquetasBtn, configBtn || null);
+
+    const checklistBtn = document.createElement('button');
+    checklistBtn.className = 'app-nav-item';
+    checklistBtn.setAttribute('onclick', 'abrirChecklist()');
+    checklistBtn.innerHTML = `<span class="app-nav-icon">📋</span><span class="app-nav-label">Checklist</span>`;
+    bottomNav.insertBefore(checklistBtn, configBtn || null);
+  }
+
+  if (IS_LOJA) {
+    ['cmv', 'notas', 'comparativo', 'dre', 'config'].forEach(v => {
+      const btn = bottomNav.querySelector(`[data-view="${v}"]`);
+      if (btn) btn.style.display = 'none';
+    });
+  }
+}
+
+function abrirChecklist() {
+  if (!CHECKLIST_URL) { showToast('Link do checklist ainda não configurado'); return; }
+  window.open(CHECKLIST_URL, '_blank');
 }
 
 // ── Construção de tabs ────────────────────────────────────────
@@ -1579,7 +1627,7 @@ function switchTab(key) {
 
 // ── Semana ────────────────────────────────────────────────────
 function getCurrentView() {
-  const views = ['dashboard','contagem','cmv','notas','config','comparativo','dre'];
+  const views = ['dashboard','contagem','cmv','notas','config','comparativo','dre','etiquetas'];
   for (const v of views) {
     const el = document.getElementById('view-' + v);
     if (el && el.style.display !== 'none') return v;
@@ -5894,4 +5942,824 @@ function copyLinha(btn, text) {
     btn.style.color = '#16a34a';
     setTimeout(() => { btn.textContent = prev; btn.style.color = ''; }, 1800);
   }).catch(() => showToast('Copie manualmente: ' + text.slice(0, 40) + '...'));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── MÓDULO ETIQUETAS (Suflex) — teste isolado, só Batel ──────────
+// Etiquetagem de matéria-prima aberta e itens produzidos, com
+// validade calculada pela tabela CVS/RDC, impressão via impressora
+// térmica USB (Elgin L42DT, ZPL) e fila de pedidos no Supabase.
+// ═══════════════════════════════════════════════════════════════
+
+const ETQ_CLOUD_CATEGORIAS = 'etiquetas_categorias';                 // compartilhado entre unidades
+const ETQ_CLOUD_CATALOGO   = 'etiquetas_catalogo_' + UNIT_ID;
+const ETQ_CLOUD_PEDIDOS    = 'etiquetas_pedidos_' + UNIT_ID;
+const ETQ_CLOUD_PRINTER      = 'etiquetas_printer_' + UNIT_ID;       // { pareado: true } — flag informativo
+const ETQ_CLOUD_DESPERDICIO  = 'etiquetas_desperdicio_' + UNIT_ID;
+
+const ETQ_MOTIVOS_DESPERDICIO = [
+  { id: 'vencido',      nome: 'Venceu / vencido' },
+  { id: 'erro_producao', nome: 'Erro de produção' },
+  { id: 'erro_pedido',   nome: 'Erro de pedido' },
+  { id: 'queda_contaminacao', nome: 'Caiu / contaminação' },
+  { id: 'outro',         nome: 'Outro' },
+];
+
+let etqState = {
+  categorias:   [],
+  catalogo:     [],
+  pedidos:      [],
+  desperdicios: [],
+  loaded:       false,
+  loading:      false,
+};
+let etqSearchTerm = '';
+let etqGrupoFiltro = null;
+let etqUsbDevice  = null;
+let etqPollTimer  = null;
+
+// ── Identificação do colaborador (PIN LOJA é compartilhado — precisa saber QUEM fez o quê) ──
+function etqNomeUsuario() {
+  const stored = (sessionStorage.getItem('etq_colaborador') || '').trim();
+  if (stored) return stored;
+  if (_session && _session.nome && !_session.isLoja) return _session.nome; // admin já tem nome próprio
+  return null;
+}
+
+function etqEnsureColaborador(callback) {
+  const nome = etqNomeUsuario();
+  if (nome) { callback(); return; }
+  etqShowInlineModal(`
+    <h2>👤 Quem é você?</h2>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:12px">O PIN Loja é compartilhado — precisamos saber quem fez cada etiqueta.</p>
+    <div class="nota-field">
+      <label>Seu nome</label>
+      <input id="etqColabNome" type="text" placeholder="Ex: Geovane" autocomplete="off"
+             onkeydown="if(event.key==='Enter')etqSalvarColaborador()">
+    </div>
+    <button class="inv-modal-btn" onclick="etqSalvarColaborador()">Continuar</button>
+    <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Cancelar</button>
+  `);
+  window._etqPendingAfterColaborador = callback;
+  setTimeout(() => document.getElementById('etqColabNome')?.focus(), 100);
+}
+
+function etqSalvarColaborador() {
+  const nome = document.getElementById('etqColabNome').value.trim();
+  if (!nome) return;
+  sessionStorage.setItem('etq_colaborador', nome);
+  etqCloseInlineModal();
+  etqRenderColaboradorBadge();
+  const cb = window._etqPendingAfterColaborador;
+  window._etqPendingAfterColaborador = null;
+  if (cb) cb();
+}
+
+function etqTrocarColaborador() {
+  sessionStorage.removeItem('etq_colaborador');
+  etqEnsureColaborador(() => {});
+}
+
+function etqRenderColaboradorBadge() {
+  const el = document.getElementById('etqColabBadge');
+  if (!el) return;
+  const nome = etqNomeUsuario();
+  el.innerHTML = nome
+    ? `<span onclick="etqTrocarColaborador()">👤 ${escHtml(nome)} <em>(trocar)</em></span>`
+    : '';
+}
+
+async function loadEtiquetasData() {
+  if (etqState.loaded || etqState.loading) return;
+  etqState.loading = true;
+  try {
+    const [catRows, catalogoRows, pedidosRows, desperdicioRows] = await Promise.all([
+      etqFetchKV(ETQ_CLOUD_CATEGORIAS),
+      etqFetchKV(ETQ_CLOUD_CATALOGO),
+      etqFetchKV(ETQ_CLOUD_PEDIDOS),
+      etqFetchKV(ETQ_CLOUD_DESPERDICIO),
+    ]);
+
+    // Formato antigo na nuvem (sem "variantes"/"grupo") — reseed com o default novo.
+    const catOk      = catRows && catRows.itens && catRows.itens[0] && catRows.itens[0].variantes;
+    const catalogoOk = catalogoRows && catalogoRows.itens && catalogoRows.itens.some(i => i.grupo) && catalogoRows.itens.some(i => i.preco != null);
+
+    etqState.categorias   = catOk      ? catRows.itens      : ETIQUETAS_CATEGORIAS_DEFAULT.slice();
+    etqState.catalogo     = catalogoOk ? catalogoRows.itens : ETIQUETAS_CATALOGO_DEFAULT.slice();
+    etqState.pedidos      = (pedidosRows && pedidosRows.itens) || [];
+    etqState.desperdicios = (desperdicioRows && desperdicioRows.itens) || [];
+
+    // Primeira vez ou formato antigo — (re)semeia com os defaults
+    if (!catOk)      await etqSaveKV(ETQ_CLOUD_CATEGORIAS, etqState.categorias);
+    if (!catalogoOk) await etqSaveKV(ETQ_CLOUD_CATALOGO, etqState.catalogo);
+  } catch (e) {
+    etqState.categorias   = ETIQUETAS_CATEGORIAS_DEFAULT.slice();
+    etqState.catalogo     = ETIQUETAS_CATALOGO_DEFAULT.slice();
+    etqState.pedidos      = [];
+    etqState.desperdicios = [];
+  }
+  etqState.loaded  = true;
+  etqState.loading = false;
+}
+
+async function etqFetchKV(chave) {
+  if (!SUPABASE_CONFIGURED) return null;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/inventario_dados?chave=eq.${chave}&select=estado`,
+      { headers: supabaseHeaders() }
+    );
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return (rows && rows[0] && rows[0].estado) || null;
+  } catch (e) { return null; }
+}
+
+async function etqSaveKV(chave, itens) {
+  if (!SUPABASE_CONFIGURED) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/inventario_dados`, {
+      method:  'POST',
+      headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+      body:    JSON.stringify({ chave, estado: { itens }, atualizado_em: new Date().toISOString() })
+    });
+  } catch (e) {}
+}
+
+function etqCategoriaById(id) {
+  return etqState.categorias.find(c => c.id === id) || etqState.categorias.find(c => c.id === 'preparado_geral');
+}
+
+// ── Render principal ──────────────────────────────────────────
+async function renderEtiquetas() {
+  const el = document.getElementById('etiquetasContent');
+  if (!el) return;
+  el.innerHTML = '<p style="padding:30px;text-align:center;color:#9ca3af">Carregando…</p>';
+  await loadEtiquetasData();
+  etqRenderHome();
+}
+
+let etqActiveBucket = null;
+
+function etqRenderHome() {
+  const el = document.getElementById('etiquetasContent');
+  if (!el) return;
+
+  const grupos = (typeof ETQ_GRUPOS_DEFAULT !== 'undefined') ? ETQ_GRUPOS_DEFAULT : [];
+
+  el.innerHTML = `
+    <div class="etq-wrap">
+      <div id="etqColabBadge" class="etq-colab-badge"></div>
+
+      <div id="etqDash"></div>
+
+      <div class="etq-search-row">
+        <input id="etqSearch" type="text" placeholder="🔍 Buscar produto..." autocomplete="off"
+               value="${escHtml(etqSearchTerm)}" oninput="etqOnSearch(this.value)">
+      </div>
+
+      <div class="etq-grupo-chips">
+        <button class="etq-chip${etqGrupoFiltro===null?' etq-chip-active':''}" onclick="etqSetGrupoFiltro(null)">Todos</button>
+        ${grupos.map(g => `<button class="etq-chip${etqGrupoFiltro===g.id?' etq-chip-active':''}" onclick="etqSetGrupoFiltro('${g.id}')">${g.icon} ${escHtml(g.nome)}</button>`).join('')}
+      </div>
+
+      <div id="etqResultsList" class="etq-results"></div>
+
+      <div class="etq-footer-actions">
+        <button class="config-btn" onclick="etqEnsureColaborador(() => etqOpenDesperdicio(null))">🗑️ Registrar desperdício / erro</button>
+        <button class="config-btn" onclick="etqOpenHistorico()">📜 Histórico de etiquetas</button>
+        <button class="config-btn" onclick="etqPairPrinter()">${etqUsbDevice ? '🖨️ Impressora pareada ✓' : '🖨️ Parear impressora'}</button>
+      </div>
+    </div>
+  `;
+  etqRenderColaboradorBadge();
+  etqRenderDashboard();
+  etqRenderResults();
+}
+
+function etqSetGrupoFiltro(grupoId) {
+  etqGrupoFiltro = grupoId;
+  etqRenderHome();
+}
+
+// ── Dashboard: vencidos / vencendo / pendente impressão / pendente revisão ──
+function etqGetBuckets() {
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const isoHoje = hoje.toISOString().slice(0,10);
+
+  const alvoVencendo = etqDiasAlvoHoje(); // já trata sábado/domingo
+
+  const ativos = etqState.pedidos.filter(p => !p.tratado);
+
+  const vencidos  = ativos.filter(p => p.validade < isoHoje);
+  const vencendo  = ativos.filter(p => p.validade >= isoHoje && alvoVencendo.has(p.validade));
+  const pendImpressao = etqState.pedidos.filter(p => p.status === 'pendente' && !p.tratado);
+  const pendRevisao   = etqState.catalogo.filter(i => i.pendenteRevisao);
+
+  const seteDiasAtras = new Date(hoje); seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+  const isoSeteDias = seteDiasAtras.toISOString().slice(0,10);
+  const desperdicioSemana = etqState.desperdicios
+    .filter(d => (d.criadoEm || '').slice(0,10) >= isoSeteDias)
+    .sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''));
+
+  return { vencidos, vencendo, pendImpressao, pendRevisao, desperdicioSemana };
+}
+
+function etqDiasAlvoHoje() {
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const dow = hoje.getDay(); // 0=domingo, 6=sábado
+  const iso = d => d.toISOString().slice(0,10);
+  const alvo = new Set([iso(hoje)]);
+  if (dow === 6) { const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1); alvo.add(iso(amanha)); }
+  if (dow === 1) { const ontem  = new Date(hoje); ontem.setDate(ontem.getDate()-1);  alvo.add(iso(ontem));  }
+  return alvo;
+}
+
+// Mantido por compatibilidade (badge simples) — mesma base do dashboard novo
+function etqGetAlertaHoje() {
+  const b = etqGetBuckets();
+  return [...b.vencidos, ...b.vencendo];
+}
+
+function etqRenderDashboard() {
+  const el = document.getElementById('etqDash');
+  if (!el) return;
+  const b = etqGetBuckets();
+
+  const tile = (key, icon, label, count, tone) => `
+    <div class="etq-tile etq-tile-${tone}${etqActiveBucket === key ? ' etq-tile-open' : ''}" onclick="etqToggleBucket('${key}')">
+      <span class="etq-tile-num">${icon} ${count}</span>
+      <span class="etq-tile-label">${label}</span>
+    </div>`;
+
+  const valorSemana = b.desperdicioSemana.reduce((s, d) => s + (d.valorPerdido || 0), 0);
+  const despLabel = valorSemana > 0 ? `Perdeu R$ ${fmt(valorSemana)}` : 'Desperdício (7 dias)';
+
+  el.innerHTML = `
+    <div class="etq-dash-grid">
+      ${tile('vencidos', '🔴', 'Vencidos', b.vencidos.length, 'red')}
+      ${tile('vencendo', '🟠', 'Vencendo', b.vencendo.length, 'orange')}
+      ${tile('pendImpressao', '🖨️', 'Sem imprimir', b.pendImpressao.length, 'blue')}
+      ${tile('pendRevisao', '⚠️', 'Revisar cadastro', b.pendRevisao.length, 'gray')}
+      ${tile('desperdicio', '🗑️', despLabel, b.desperdicioSemana.length, 'gray')}
+    </div>
+    <div id="etqDashDetail"></div>
+  `;
+  etqRenderBucketDetail();
+}
+
+function etqToggleBucket(key) {
+  etqActiveBucket = etqActiveBucket === key ? null : key;
+  etqRenderDashboard();
+}
+
+function etqRenderBucketDetail() {
+  const el = document.getElementById('etqDashDetail');
+  if (!el) return;
+  if (!etqActiveBucket) { el.innerHTML = ''; return; }
+
+  const b = etqGetBuckets();
+  const titles = { vencidos: 'Vencidos', vencendo: 'Vencendo', pendImpressao: 'Sem imprimir', pendRevisao: 'Cadastro pendente de revisão' };
+
+  if (etqActiveBucket === 'pendRevisao') {
+    el.innerHTML = `
+      <div class="etq-dash-list">
+        ${b.pendRevisao.length === 0 ? '<p class="etq-hint">Nada pra revisar.</p>' : b.pendRevisao.map(i => `
+          <div class="etq-dash-row">
+            <div>
+              <strong>${escHtml(i.nome)}</strong>
+              <div class="etq-hist-meta">categoria atual: ${escHtml(etqCategoriaById(i.cat).nome)}</div>
+            </div>
+            <select class="etq-inline-select" onchange="etqAjustarCategoriaCatalogo('${i.id}', this.value)">
+              ${etqState.categorias.map(c => `<option value="${c.id}" ${c.id===i.cat?'selected':''}>${escHtml(c.nome)}</option>`).join('')}
+            </select>
+          </div>`).join('')}
+      </div>`;
+    return;
+  }
+
+  if (etqActiveBucket === 'desperdicio') {
+    el.innerHTML = `
+      <div class="etq-dash-list">
+        ${b.desperdicioSemana.length === 0 ? '<p class="etq-hint">Nenhum desperdício registrado nos últimos 7 dias.</p>' : b.desperdicioSemana.map(d => `
+          <div class="etq-dash-row">
+            <div>
+              <strong>${escHtml(d.produto)}</strong>${d.valorPerdido ? ` <span style="color:#dc2626;font-weight:700">R$ ${fmt(d.valorPerdido)}</span>` : ''}
+              <div class="etq-hist-meta">${escHtml(d.quantidade)} ${escHtml(d.unidade)} · ${escHtml(etqMotivoNome(d.motivo))} · ${escHtml(d.responsavel)}</div>
+              ${d.obs ? `<div class="etq-hist-meta">${escHtml(d.obs)}</div>` : ''}
+            </div>
+          </div>`).join('')}
+      </div>`;
+    return;
+  }
+
+  const list = b[etqActiveBucket] || [];
+  const isExpiryBucket = etqActiveBucket === 'vencidos' || etqActiveBucket === 'vencendo';
+  el.innerHTML = `
+    <div class="etq-dash-list">
+      ${list.length === 0 ? '<p class="etq-hint">Nada aqui.</p>' : list.map(p => `
+        <div class="etq-dash-row">
+          <div>
+            <strong>${escHtml(p.produto)}</strong>
+            <div class="etq-hist-meta">lote ${escHtml(p.lote)} · validade ${etqFmtData(p.validade)} · ${p.status === 'impresso' ? '🖨️ impresso' : '⏳ não impresso'}</div>
+          </div>
+          ${isExpiryBucket ? `
+            <div style="display:flex;gap:6px">
+              <button class="etq-reprint-btn" onclick="etqMarcarTratado('${p.id}')" title="Usei / tratei sem desperdício">✓</button>
+              <button class="etq-reprint-btn" onclick="etqEnsureColaborador(() => etqOpenDesperdicio('${p.id}'))" title="Registrar como desperdício">🗑️</button>
+            </div>
+          ` : `<button class="etq-reprint-btn" onclick="etqMarcarTratado('${p.id}')" title="Marcar como tratado">✓</button>`}
+        </div>`).join('')}
+    </div>`;
+}
+
+function etqMotivoNome(id) {
+  return (ETQ_MOTIVOS_DESPERDICIO.find(m => m.id === id) || {}).nome || id;
+}
+
+async function etqAjustarCategoriaCatalogo(itemId, novaCat) {
+  const item = etqState.catalogo.find(i => i.id === itemId);
+  if (!item) return;
+  item.cat = novaCat;
+  item.pendenteRevisao = false;
+  await etqSaveKV(ETQ_CLOUD_CATALOGO, etqState.catalogo);
+  showToast('Categoria atualizada ✓');
+  etqRenderDashboard();
+}
+
+async function etqMarcarTratado(pedidoId) {
+  const p = etqState.pedidos.find(x => x.id === pedidoId);
+  if (!p) return;
+  p.tratado = true;
+  await etqSaveKV(ETQ_CLOUD_PEDIDOS, etqState.pedidos);
+  showToast('Marcado como tratado ✓');
+  etqRenderDashboard();
+}
+
+// ── Registro de desperdício (vencidos descartados + erros avulsos) ──
+// pedidoId: se veio da lista de vencidos/vencendo, pré-preenche produto e motivo 'vencido'
+//           e marca o pedido como tratado ao salvar. Null = lançamento avulso (erro, queda, etc).
+// Acha o item do catálogo pelo nome exato (usado pra puxar o preço automaticamente)
+function etqCatalogoPorNome(nome) {
+  const n = normalizeForMatch(nome || '');
+  return etqState.catalogo.find(i => normalizeForMatch(i.nome) === n);
+}
+
+function etqOpenDesperdicio(pedidoId) {
+  const pedido = pedidoId ? etqState.pedidos.find(x => x.id === pedidoId) : null;
+  const motivoOptions = ETQ_MOTIVOS_DESPERDICIO.map(m =>
+    `<option value="${m.id}" ${pedido && m.id === 'vencido' ? 'selected' : ''}>${escHtml(m.nome)}</option>`).join('');
+  const itemCatalogo = pedido ? etqCatalogoPorNome(pedido.produto) : null;
+  const precoInicial = itemCatalogo && itemCatalogo.preco != null ? itemCatalogo.preco : '';
+
+  etqShowInlineModal(`
+    <h2>🗑️ Registrar Desperdício</h2>
+    <input type="hidden" id="etqDespPedidoId" value="${pedido ? pedido.id : ''}">
+    <div class="nota-field">
+      <label>Produto</label>
+      <input id="etqDespProduto" type="text" value="${escHtml(pedido ? pedido.produto : '')}" placeholder="Nome do produto" autocomplete="off"
+             onchange="etqAutoPrecoDesperdicio(this.value)">
+    </div>
+    <div class="nota-field">
+      <label>Quantidade</label>
+      <input id="etqDespQtd" type="text" inputmode="decimal" placeholder="Ex: 2" autocomplete="off" oninput="etqRecalcValorDesperdicio()">
+    </div>
+    <div class="nota-field">
+      <label>Unidade</label>
+      <input id="etqDespUnidade" type="text" placeholder="kg, un, porção..." value="${escHtml(itemCatalogo ? itemCatalogo.unidade : 'un')}" autocomplete="off">
+    </div>
+    <div class="nota-field">
+      <label>Preço unitário (R$) <span style="font-weight:400;color:#9ca3af">— opcional, calcula o prejuízo</span></label>
+      <input id="etqDespPreco" type="text" inputmode="decimal" placeholder="Ex: 18,00" value="${precoInicial}" autocomplete="off" oninput="etqRecalcValorDesperdicio()">
+    </div>
+    <p id="etqDespValorInfo" style="font-size:13px;font-weight:700;color:#dc2626;margin:4px 0 0"></p>
+    <div class="nota-field">
+      <label>Motivo</label>
+      <select id="etqDespMotivo" class="inv-select-linha">${motivoOptions}</select>
+    </div>
+    <div class="nota-field">
+      <label>Observação (opcional)</label>
+      <input id="etqDespObs" type="text" placeholder="Detalhe rápido..." autocomplete="off">
+    </div>
+    <button class="inv-modal-btn" onclick="etqSalvarDesperdicio()">Salvar</button>
+    <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Cancelar</button>
+  `);
+  etqRecalcValorDesperdicio();
+}
+
+// Ao digitar/trocar o nome do produto (cadastro avulso), tenta achar o preço no catálogo
+function etqAutoPrecoDesperdicio(nome) {
+  const item = etqCatalogoPorNome(nome);
+  const precoEl = document.getElementById('etqDespPreco');
+  const unidadeEl = document.getElementById('etqDespUnidade');
+  if (item && precoEl && !precoEl.value) precoEl.value = item.preco != null ? item.preco : '';
+  if (item && unidadeEl) unidadeEl.value = item.unidade;
+  etqRecalcValorDesperdicio();
+}
+
+function etqRecalcValorDesperdicio() {
+  const qtd   = parseFloat((document.getElementById('etqDespQtd')?.value || '').replace(',','.'));
+  const preco = parseFloat((document.getElementById('etqDespPreco')?.value || '').replace(',','.'));
+  const info  = document.getElementById('etqDespValorInfo');
+  if (!info) return;
+  if (qtd > 0 && preco > 0) {
+    info.textContent = `💸 Prejuízo estimado: R$ ${fmt(qtd * preco)}`;
+  } else {
+    info.textContent = '';
+  }
+}
+
+async function etqSalvarDesperdicio() {
+  const pedidoId = document.getElementById('etqDespPedidoId').value || null;
+  const produto  = document.getElementById('etqDespProduto').value.trim();
+  const qtd      = document.getElementById('etqDespQtd').value.trim();
+  const unidade  = document.getElementById('etqDespUnidade').value.trim() || 'un';
+  const preco    = parseFloat(document.getElementById('etqDespPreco').value.replace(',','.'));
+  const motivo   = document.getElementById('etqDespMotivo').value;
+  const obs      = document.getElementById('etqDespObs').value.trim();
+
+  if (!produto) { showToast('Digite o produto'); return; }
+
+  const qtdNum = parseFloat(qtd.replace(',','.'));
+  const valorPerdido = (qtdNum > 0 && preco > 0) ? Math.round(qtdNum * preco * 100) / 100 : null;
+
+  const registro = {
+    id: 'd_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    produto, quantidade: qtd || '—', unidade,
+    precoUnitario: preco > 0 ? preco : null,
+    valorPerdido,
+    motivo, obs,
+    pedidoOrigemId: pedidoId,
+    responsavel: etqNomeUsuario(),
+    criadoEm: new Date().toISOString(),
+  };
+  etqState.desperdicios.unshift(registro);
+  await etqSaveKV(ETQ_CLOUD_DESPERDICIO, etqState.desperdicios);
+
+  if (pedidoId) {
+    const p = etqState.pedidos.find(x => x.id === pedidoId);
+    if (p) { p.tratado = true; await etqSaveKV(ETQ_CLOUD_PEDIDOS, etqState.pedidos); }
+  }
+
+  etqCloseInlineModal();
+  showToast(valorPerdido ? `Desperdício registrado — R$ ${fmt(valorPerdido)} ✓` : 'Desperdício registrado ✓');
+  etqRenderDashboard();
+}
+
+function etqOnSearch(val) {
+  etqSearchTerm = val;
+  etqRenderResults();
+}
+
+function etqRenderResults() {
+  const list = document.getElementById('etqResultsList');
+  if (!list) return;
+  const q = normalizeForMatch(etqSearchTerm || '');
+
+  if (!q && !etqGrupoFiltro) { list.innerHTML = '<p class="etq-hint">Digite pra buscar ou escolha um grupo acima.</p>'; return; }
+
+  let matches = etqState.catalogo.filter(i => !q || normalizeForMatch(i.nome).includes(q));
+  if (etqGrupoFiltro) matches = matches.filter(i => (i.grupo || 'outros') === etqGrupoFiltro);
+  matches = matches.slice(0, 40);
+
+  let html = matches.map(item => `
+    <div class="etq-item-row" onclick="etqEnsureColaborador(() => etqOpenPrintModal('${item.id}'))">
+      <span class="etq-item-nome">${escHtml(item.nome)}${item.pendenteRevisao ? ' <em class="etq-badge-revisar">revisar</em>' : ''}</span>
+      <span class="etq-item-cat">${escHtml(etqCategoriaById(item.cat).nome)}</span>
+    </div>
+  `).join('');
+
+  if (q) {
+    html += `
+      <div class="etq-item-row etq-item-new" onclick="etqEnsureColaborador(() => etqOpenCadastroRapido(document.getElementById('etqNewItemName').textContent))">
+        <span>➕ Cadastrar "<span id="etqNewItemName">${escHtml(etqSearchTerm)}</span>" como novo produto</span>
+      </div>`;
+  }
+
+  list.innerHTML = html || '<p class="etq-hint">Nenhum item encontrado.</p>';
+}
+
+// ── Alerta diário (badge) — considera loja fechada aos domingos ──
+function etqGetAlertaHoje() {
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const dow = hoje.getDay(); // 0=domingo, 6=sábado
+
+  const alvo = new Set();
+  const iso = d => d.toISOString().slice(0,10);
+  alvo.add(iso(hoje));
+  if (dow === 6) { const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1); alvo.add(iso(amanha)); } // sábado: inclui domingo
+  if (dow === 1) { const ontem  = new Date(hoje); ontem.setDate(ontem.getDate()-1);  alvo.add(iso(ontem));  } // segunda: catch-up domingo
+
+  return etqState.pedidos.filter(p => p.status !== 'cancelado' && alvo.has(p.validade));
+}
+
+function etqFmtData(iso) {
+  if (!iso) return '—';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}`;
+}
+
+// ── Auto-categorização por palavra-chave (mesma heurística usada pra importar o CUSTOS) ──
+const ETQ_AUTOCAT_REGRAS = [
+  { cat: 'pescado_cru',       grupo: 'pescados',   kws: ['tilapia','tilápia','peixe','salmao','salmão','camarao','camarão'] },
+  { cat: 'carnes_aves_cruas', grupo: 'frango',      kws: ['frango','peito de peru','peru'] },
+  { cat: 'carnes_aves_cruas', grupo: 'carnes',      kws: ['mignon','bacon','calabresa','costelinha','carne','posta','presunto'] },
+  { cat: 'ovos',              grupo: 'hortifruti',  kws: ['ovo'] },
+  { cat: 'laticinios',        grupo: 'laticinios',  kws: ['queijo','muçarela','mucarela','leite','iogurte','manteiga','requeijão','requeijao','ricota','gorgonzola','creme de leite','parmesão','parmesao'] },
+  { cat: 'maionese_derivados',grupo: 'secos',       kws: ['maionese','molho','vinagrete','pesto','guacamole'] },
+  { cat: 'hortifruti_higienizado', grupo: 'hortifruti', kws: ['alface','folha','repolho','escarola','manjeric','couve','aipim','cogumelo','tomate','berinjela','abobrinha','cebola','cebolinha','cenoura','pepino','abacate','limão','limao','salsinha','brócolis','brocolis','abóbora','abobora','mandioca','batata','pupunha','edamame'] },
+  { cat: 'preparado_geral',   grupo: 'bebidas',     kws: ['suco','chá','cha ','refrigerante','kombucha','cerveja','vinho'] },
+  { cat: 'secos_graos',       grupo: 'secos',       kws: ['açúcar','acucar','arroz','farinha','feijão','feijao','macarrão','macarrao','aveia','tapioca','chia','linhaça','linhaca','quinoa','amêndoa','amendoa','amendoim','noz','gergelin','gergelim','girassol','orégano','oregano','louro','páprica','paprica','pimenta','mel','vinagre','azeite','óleo','oleo','mostarda','shoyu','alho','tempero','ervas','café','cafe','mate','trigo','água','agua','milho','pão','pao','sal'] },
+];
+
+function etqAutoCategorizar(nome) {
+  const n = ' ' + nome.toLowerCase() + ' ';
+  for (const regra of ETQ_AUTOCAT_REGRAS) {
+    if (regra.kws.some(kw => n.includes(kw))) return { cat: regra.cat, grupo: regra.grupo };
+  }
+  return { cat: 'preparado_geral', grupo: 'producao' }; // fallback: item feito na hora (ex: sobremesa avulsa)
+}
+
+// ── Cadastro rápido de item novo — categorização automática ──
+function etqOpenCadastroRapido(nomeInicial) {
+  etqShowInlineModal(`
+    <h2>Cadastrar Produto</h2>
+    <div class="nota-field">
+      <label>Nome do produto</label>
+      <input id="etqNewNome" type="text" value="${escHtml(nomeInicial || '')}" autocomplete="off">
+    </div>
+    <p style="font-size:12px;color:#6b7280;margin-top:6px">A categoria de validade é detectada automaticamente pelo nome e fica marcada como "pendente revisão" pra gerência confirmar depois.</p>
+    <button class="inv-modal-btn" onclick="etqSaveCadastroRapido()">Salvar e Continuar</button>
+    <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Cancelar</button>
+  `);
+}
+
+async function etqSaveCadastroRapido() {
+  const nome = document.getElementById('etqNewNome').value.trim();
+  if (!nome) return;
+  const { cat, grupo } = etqAutoCategorizar(nome);
+
+  const id = 'loja_' + nome.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') + '_' + Date.now().toString(36);
+
+  const item = { id, nome, unidade: 'un', cat, grupo, origem: 'cadastro_loja', pendenteRevisao: true };
+  etqState.catalogo.push(item);
+  await etqSaveKV(ETQ_CLOUD_CATALOGO, etqState.catalogo);
+  etqCloseInlineModal();
+  showToast(`Produto cadastrado como "${etqCategoriaById(cat).nome}" ✓`);
+  etqOpenPrintModal(id);
+}
+
+// ── Estado de armazenamento: qual variante da categoria usar ──
+function etqEstadosDisponiveis(cat) {
+  const variantes = cat.variantes || {};
+  return ETQ_ARMAZENAMENTO_DEFAULT.filter(a => variantes[a.id]);
+}
+function etqEstadoDefault(cat) {
+  const disponiveis = etqEstadosDisponiveis(cat);
+  const preferido = disponiveis.find(a => a.id === 'resfriado');
+  return (preferido || disponiveis[0] || {}).id || 'resfriado';
+}
+function etqVariante(cat, estadoId) {
+  return (cat.variantes && cat.variantes[estadoId]) || Object.values(cat.variantes || {})[0] || { dias: 3, temp: '—', fonte: '—' };
+}
+
+// ── Confirmar lote/validade e gerar pedido de impressão ──────
+function etqOpenPrintModal(itemId) {
+  const item = etqState.catalogo.find(i => i.id === itemId);
+  if (!item) return;
+  const cat = etqCategoriaById(item.cat);
+  const estadoInicial = etqEstadoDefault(cat);
+  const hoje = new Date();
+  const isoHoje = hoje.toISOString().slice(0,10);
+
+  etqShowInlineModal(`
+    <h2>${escHtml(item.nome)}</h2>
+    <input type="hidden" id="etqPrintCatId" value="${cat.id}">
+    <div class="nota-field">
+      <label>Armazenamento</label>
+      <div class="etq-estado-btns" id="etqEstadoBtns">
+        ${etqEstadosDisponiveis(cat).map(a => `
+          <button type="button" class="etq-estado-btn${a.id===estadoInicial?' etq-estado-btn-active':''}"
+                  data-estado="${a.id}" onclick="etqSelecionarEstado('${a.id}')">${a.icon} ${escHtml(a.nome)}</button>
+        `).join('')}
+      </div>
+      <p id="etqEstadoInfo" style="font-size:12px;color:#6b7280;margin-top:8px"></p>
+    </div>
+    <div class="nota-field">
+      <label>Data de manipulação/abertura</label>
+      <input id="etqDataManip" type="date" value="${isoHoje}" onchange="etqRecalcValidade()">
+    </div>
+    <div class="nota-field">
+      <label>Validade calculada</label>
+      <input id="etqDataValidade" type="date" value="${isoHoje}">
+    </div>
+    <div class="nota-field">
+      <label>Lote (opcional)</label>
+      <input id="etqLote" type="text" placeholder="Ex: L001" autocomplete="off">
+    </div>
+    <button class="inv-modal-btn" onclick="etqConfirmarPedido('${item.id}')">🖨️ Gerar Etiqueta</button>
+    <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Cancelar</button>
+  `);
+  window._etqEstadoAtual = estadoInicial;
+  etqRecalcValidade();
+}
+
+function etqSelecionarEstado(estadoId) {
+  window._etqEstadoAtual = estadoId;
+  document.querySelectorAll('#etqEstadoBtns .etq-estado-btn').forEach(b =>
+    b.classList.toggle('etq-estado-btn-active', b.dataset.estado === estadoId));
+  etqRecalcValidade();
+}
+
+function etqRecalcValidade() {
+  const manipEl = document.getElementById('etqDataManip');
+  const validEl = document.getElementById('etqDataValidade');
+  const infoEl  = document.getElementById('etqEstadoInfo');
+  const catId   = document.getElementById('etqPrintCatId')?.value;
+  if (!manipEl || !validEl || !catId) return;
+
+  const cat = etqCategoriaById(catId);
+  const estado = window._etqEstadoAtual || etqEstadoDefault(cat);
+  const v = etqVariante(cat, estado);
+
+  const d = new Date(manipEl.value + 'T00:00:00');
+  d.setDate(d.getDate() + (v.dias || 3));
+  validEl.value = d.toISOString().slice(0,10);
+  if (infoEl) infoEl.textContent = `${cat.nome} · ${v.temp} · ${v.dias} dias (${v.fonte})`;
+}
+
+async function etqConfirmarPedido(itemId) {
+  const item = etqState.catalogo.find(i => i.id === itemId);
+  if (!item) return;
+  const dataManip    = document.getElementById('etqDataManip').value;
+  const dataValidade = document.getElementById('etqDataValidade').value;
+  const lote          = document.getElementById('etqLote').value.trim();
+  const armazenamento = window._etqEstadoAtual || 'resfriado';
+
+  const pedido = {
+    id: 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    produto: item.nome,
+    lote: lote || '—',
+    manipulacao: dataManip,
+    validade: dataValidade,
+    armazenamento,
+    criadoPor: etqNomeUsuario(),
+    criadoEm: new Date().toISOString(),
+    status: 'pendente', // pendente | impresso
+  };
+
+  etqState.pedidos.unshift(pedido);
+  await etqSaveKV(ETQ_CLOUD_PEDIDOS, etqState.pedidos);
+  etqCloseInlineModal();
+
+  if (etqUsbDevice) {
+    await etqPrintPedido(pedido);
+  } else {
+    showToast('Pedido registrado — pareie a impressora nesta estação pra imprimir');
+  }
+  etqRenderHome();
+}
+
+function etqArmazenamentoNome(id) {
+  return (ETQ_ARMAZENAMENTO_DEFAULT.find(a => a.id === id) || {}).nome || id || '—';
+}
+
+// ── Histórico ─────────────────────────────────────────────────
+function etqOpenHistorico() {
+  const rows = etqState.pedidos.slice(0, 100).map(p => `
+    <div class="etq-hist-row">
+      <div>
+        <strong>${escHtml(p.produto)}</strong>
+        <div class="etq-hist-meta">Lote ${escHtml(p.lote)} · ${escHtml(etqArmazenamentoNome(p.armazenamento))} · manip. ${etqFmtData(p.manipulacao)} · validade ${etqFmtData(p.validade)}</div>
+        <div class="etq-hist-meta">${escHtml(p.criadoPor)} · ${p.status === 'impresso' ? '🖨️ impresso' : '⏳ pendente'}</div>
+      </div>
+      ${p.status !== 'impresso' ? `<button class="etq-reprint-btn" onclick="etqReimprimir('${p.id}')">🖨️</button>` : ''}
+    </div>`).join('');
+
+  etqShowInlineModal(`
+    <h2>Histórico de Etiquetas</h2>
+    <div class="etq-hist-list">${rows || '<p class="etq-hint">Nenhuma etiqueta ainda.</p>'}</div>
+    <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Fechar</button>
+  `, true);
+}
+
+async function etqReimprimir(pedidoId) {
+  const p = etqState.pedidos.find(x => x.id === pedidoId);
+  if (!p) return;
+  if (!etqUsbDevice) { showToast('Pareie a impressora primeiro'); return; }
+  await etqPrintPedido(p);
+  etqOpenHistorico();
+}
+
+// ── Modal genérico inline (reaproveita estilo .inv-modal) ─────
+function etqShowInlineModal(html, wide) {
+  let overlay = document.getElementById('etqInlineOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'etqInlineOverlay';
+    overlay.className = 'inv-overlay';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `<div class="inv-modal${wide ? ' etq-modal-wide' : ''}">${html}</div>`;
+  overlay.classList.add('open');
+}
+function etqCloseInlineModal() {
+  const overlay = document.getElementById('etqInlineOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
+// ── Impressão térmica (WebUSB + ZPL) ──────────────────────────
+// Elgin L42DT: térmica direta, reconhece ZPL automaticamente, 203dpi.
+// Rolo em uso: 60x40mm = 480x320 dots (8 dots/mm).
+const ETQ_LABEL_WIDTH_DOTS  = 480;
+const ETQ_LABEL_HEIGHT_DOTS = 320;
+
+function etqBuildZPL(pedido) {
+  const esc = s => String(s || '').replace(/[\^~]/g, '');
+  const boxW = ETQ_LABEL_WIDTH_DOTS - 40; // margem de 20 dots nas duas bordas
+  return [
+    '^XA',
+    '^CI28', // UTF-8 (acentos)
+    `^PW${ETQ_LABEL_WIDTH_DOTS}`,
+    `^LL${ETQ_LABEL_HEIGHT_DOTS}`,
+    // ^FB permite nome longo quebrar em até 2 linhas em vez de estourar a borda
+    `^FO20,16^A0N,22,22^FB${boxW},2,0,L,0^FD${esc(pedido.produto)}^FS`,
+    `^FO20,64^A0N,18,18^FDLote: ${esc(pedido.lote)} · ${esc(etqArmazenamentoNome(pedido.armazenamento))}^FS`,
+    `^FO20,90^A0N,18,18^FDManipulado: ${etqFmtDataBR(pedido.manipulacao)}^FS`,
+    `^FO20,118^A0N,24,24^FDValidade: ${etqFmtDataBR(pedido.validade)}^FS`,
+    `^FO20,158^A0N,16,16^FDAll Natural - Batel^FS`,
+    `^FO20,180^A0N,16,16^FD${esc(pedido.criadoPor)}^FS`,
+    '^XZ',
+  ].join('\n');
+}
+
+function etqFmtDataBR(iso) {
+  if (!iso) return '—';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+async function etqPairPrinter() {
+  if (!('usb' in navigator)) {
+    showToast('Este navegador não suporta WebUSB (use Chrome/Edge)');
+    return;
+  }
+  try {
+    const device = await navigator.usb.requestDevice({ filters: [] });
+    await device.open();
+    if (device.configuration === null) await device.selectConfiguration(1);
+    await device.claimInterface(0);
+    etqUsbDevice = device;
+    startEtiquetasPolling();
+    showToast('Impressora pareada ✓');
+    etqRenderHome();
+  } catch (e) {
+    showToast('Pareamento cancelado ou falhou');
+  }
+}
+
+async function etqSendZPLToDevice(zpl) {
+  if (!etqUsbDevice) return false;
+  try {
+    const data = new TextEncoder().encode(zpl);
+    // endpoint OUT de impressoras USB costuma ser o 1 — ajustar se necessário ao testar no aparelho real
+    await etqUsbDevice.transferOut(1, data);
+    return true;
+  } catch (e) {
+    showToast('Erro ao imprimir — confira a conexão USB');
+    return false;
+  }
+}
+
+async function etqPrintPedido(pedido) {
+  const zpl = etqBuildZPL(pedido);
+  const ok = await etqSendZPLToDevice(zpl);
+  if (ok) {
+    pedido.status = 'impresso';
+    pedido.impressoEm = new Date().toISOString();
+    await etqSaveKV(ETQ_CLOUD_PEDIDOS, etqState.pedidos);
+  }
+  return ok;
+}
+
+// ── Estação: escuta pedidos pendentes e imprime sozinha ───────
+// Só roda depois que a impressora for pareada neste aparelho (botão "Parear impressora").
+function startEtiquetasPolling() {
+  if (etqPollTimer) return;
+  etqPollTimer = setInterval(async () => {
+    if (!etqUsbDevice) return;
+    const fresh = await etqFetchKV(ETQ_CLOUD_PEDIDOS);
+    if (!fresh || !fresh.itens) return;
+    etqState.pedidos = fresh.itens;
+    const pendentes = etqState.pedidos.filter(p => p.status === 'pendente');
+    for (const p of pendentes) {
+      await etqPrintPedido(p);
+    }
+    const el = document.getElementById('etiquetasContent');
+    if (el && getCurrentView && getCurrentView() === 'etiquetas') etqRenderHome();
+  }, 8000);
 }
