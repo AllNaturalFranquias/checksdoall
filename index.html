@@ -59,6 +59,11 @@
       bigorrilho: 'Bigorrilho', cascavel: 'Cascavel', cozinhacentral: 'Cozinha Central', global: 'Painel Geral'
     };
 
+    // PIN LOJA — acesso restrito (Contagem + Etiquetas + Checklist). Teste isolado: só Batel.
+    let UNIT_LOJA = {
+      batel: [{ nome: 'Loja', pin: '5050' }],
+    };
+
     // Busca PINs reais do Supabase (mesma lógica do inventario.js)
     (async () => {
       try {
@@ -88,6 +93,16 @@
       const pin    = document.getElementById('pinInput').value;
       const admins = [...(UNIT_ADMINS[selectedUnit] || []), ...(selectedUnit !== 'global' ? (UNIT_ADMINS.global || []) : [])];
       const admin  = admins.find(a => a.pin === pin);
+
+      const lojaList = UNIT_LOJA[selectedUnit] || [];
+      const loja = !admin && lojaList.find(a => a.pin === pin);
+      if (loja) {
+        sessionStorage.setItem('inv_session', JSON.stringify({
+          nome: loja.nome, unidade: selectedUnit, isAdmin: false, isLoja: true, isGlobal: false
+        }));
+        window.location.href = 'inventario.html?u=' + selectedUnit;
+        return;
+      }
 
       if (admin) {
         const isGlobal = selectedUnit === 'global';
