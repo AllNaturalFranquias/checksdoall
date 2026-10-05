@@ -6289,11 +6289,20 @@ async function etqAjustarCategoriaCatalogo(itemId, novaCat) {
   etqRenderDashboard();
 }
 
+// A fila de pedidos também é alterada pela ponte de impressão do PC da loja (marca "impresso").
+// Por isso toda escrita re-lê o estado atual antes de gravar, pra não desfazer a alteração do outro lado.
+async function etqUpdatePedidos(mutate) {
+  const fresh = await etqFetchKV(ETQ_CLOUD_PEDIDOS);
+  const lista = (fresh && fresh.itens) ? fresh.itens : etqState.pedidos;
+  mutate(lista);
+  etqState.pedidos = lista;
+  await etqSaveKV(ETQ_CLOUD_PEDIDOS, lista);
+}
+
 async function etqMarcarTratado(pedidoId) {
   const p = etqState.pedidos.find(x => x.id === pedidoId);
   if (!p) return;
-  p.tratado = true;
-  await etqSaveKV(ETQ_CLOUD_PEDIDOS, etqState.pedidos);
+  await etqUpdatePedidos(l => { const x = l.find(i => i.id === pedidoId); if (x) x.tratado = true; });
   showToast('Marcado como tratado ✓');
   etqRenderDashboard();
 }
@@ -6400,7 +6409,7 @@ async function etqSalvarDesperdicio() {
 
   if (pedidoId) {
     const p = etqState.pedidos.find(x => x.id === pedidoId);
-    if (p) { p.tratado = true; await etqSaveKV(ETQ_CLOUD_PEDIDOS, etqState.pedidos); }
+    if (p) await etqUpdatePedidos(l => { const x = l.find(i => i.id === pedidoId); if (x) x.tratado = true; });
   }
 
   etqCloseInlineModal();
@@ -6611,15 +6620,16 @@ async function etqConfirmarPedido(itemId) {
     criadoEm: new Date().toISOString(),
     status: 'pendente', // pendente | impresso
   };
+  // ZPL pronto vai junto no pedido: a ponte de impressão do PC só precisa enviar, sem recriar o layout.
+  pedido.zpl = etqBuildZPL(pedido);
 
-  etqState.pedidos.unshift(pedido);
-  await etqSaveKV(ETQ_CLOUD_PEDIDOS, etqState.pedidos);
+  await etqUpdatePedidos(l => l.unshift(pedido));
   etqCloseInlineModal();
 
   if (etqUsbDevice) {
     await etqPrintPedido(pedido);
   } else {
-    showToast('Pedido registrado — pareie a impressora nesta estação pra imprimir');
+    showToast('Etiqueta enviada pra fila de impressão ✓');
   }
   etqRenderHome();
 }
@@ -6637,7 +6647,7 @@ function etqOpenHistorico() {
         <div class="etq-hist-meta">Lote ${escHtml(p.lote)} · ${escHtml(etqArmazenamentoNome(p.armazenamento))} · manip. ${etqFmtData(p.manipulacao)} · validade ${etqFmtData(p.validade)}</div>
         <div class="etq-hist-meta">${escHtml(p.criadoPor)} · ${p.status === 'impresso' ? '🖨️ impresso' : '⏳ pendente'}</div>
       </div>
-      ${p.status !== 'impresso' ? `<button class="etq-reprint-btn" onclick="etqReimprimir('${p.id}')">🖨️</button>` : ''}
+      <button class="etq-reprint-btn" onclick="etqReimprimir('${p.id}')" title="${p.status === 'impresso' ? 'Imprimir de novo' : 'Imprimir'}">🖨️</button>
     </div>`).join('');
 
   etqShowInlineModal(`
@@ -6650,8 +6660,16 @@ function etqOpenHistorico() {
 async function etqReimprimir(pedidoId) {
   const p = etqState.pedidos.find(x => x.id === pedidoId);
   if (!p) return;
-  if (!etqUsbDevice) { showToast('Pareie a impressora primeiro'); return; }
-  await etqPrintPedido(p);
+  if (etqUsbDevice) {
+    await etqPrintPedido(p);
+  } else {
+    // Sem impressora neste aparelho: volta pra fila e a ponte do PC da loja imprime.
+    await etqUpdatePedidos(l => {
+      const x = l.find(i => i.id === pedidoId);
+      if (x) { x.status = 'pendente'; x.zpl = etqBuildZPL(x); delete x.impressoEm; }
+    });
+    showToast('Etiqueta enviada pra fila de impressão ✓');
+  }
   etqOpenHistorico();
 }
 
@@ -6745,9 +6763,10 @@ async function etqPrintPedido(pedido) {
   const zpl = etqBuildZPL(pedido);
   const ok = await etqSendZPLToDevice(zpl);
   if (ok) {
-    pedido.status = 'impresso';
-    pedido.impressoEm = new Date().toISOString();
-    await etqSaveKV(ETQ_CLOUD_PEDIDOS, etqState.pedidos);
+    await etqUpdatePedidos(l => {
+      const x = l.find(i => i.id === pedido.id);
+      if (x) { x.status = 'impresso'; x.impressoEm = new Date().toISOString(); delete x.zpl; }
+    });
   }
   return ok;
 }
