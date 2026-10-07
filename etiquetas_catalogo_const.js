@@ -7,41 +7,50 @@ const ETQ_ARMAZENAMENTO_DEFAULT = [
   { id: 'seco',      nome: 'Seco/Ambiente', icon: '📦' },
 ];
 
-// ── Tabela de regras de validade (CVS/RDC — versionada, editável no Config) ──
-// Fonte: RDC 216/2004 ANVISA (lei vigente em Curitiba/PR) + Portaria CVS 5/2013 (SP,
-// referência técnica de mercado nacional, válida até 03/10/2026) + CVS 3/2026 (sucessora,
-// vigente a partir de 04/10/2026). Ver memória do projeto pra detalhes e fontes.
-// Cada categoria tem "variantes" por estado de armazenamento — nem toda categoria
-// tem as 3 (ex: maionese não costuma congelar, secos não resfria/congela).
+// ── Tabela de regras de validade — Portaria CVS 3/2026 (SP), vigente desde 04/10/2026 ──
+// Conferida contra o texto oficial (DOE-SP 06/07/2026, art. 44-46 e 53). A CVS 3/2026 revogou a CVS 5/2013.
+// Em Curitiba/PR a norma vinculante é a RDC 216/2004 (ANVISA); a CVS é usada como referência técnica
+// (mais rígida: 3 dias vs 5 dias da RDC). O rótulo do fabricante prevalece sobre qualquer prazo daqui.
+// Cada categoria tem "variantes" por estado de armazenamento — nem toda categoria tem as 3.
+// Congelado: a CVS dá o prazo pela temperatura do freezer (-11 a -18°C = 30 dias; abaixo de -18°C = 90 dias).
+// Usamos 30 dias (freezer a -18°C). "rev" identifica a versão da tabela (força atualizar o que está salvo na nuvem).
 const ETIQUETAS_CATEGORIAS_DEFAULT = [
-  { id: 'hortifruti_higienizado', nome: 'Hortifruti higienizado/cortado', variantes: {
-      resfriado: { temp: '5°C',  dias: 3,  fonte: 'CVS 5/2013' },
-      congelado: { temp: '-18°C',dias: 90, fonte: 'CVS 5/2013' },
+  { id: 'hortifruti_higienizado', rev: 'cvs3', nome: 'Hortifruti higienizado/cortado', variantes: {
+      resfriado: { temp: '5°C',  dias: 3,  fonte: 'CVS 3/2026' },
+      congelado: { temp: '-18°C',dias: 30, fonte: 'CVS 3/2026 (freezer -18°C)' },
   }},
-  { id: 'carnes_aves_cruas', nome: 'Carnes e aves cruas', variantes: {
-      resfriado: { temp: '4°C',  dias: 3,  fonte: 'CVS 5/2013' },
-      congelado: { temp: '-18°C',dias: 90, fonte: 'CVS 5/2013' },
+  { id: 'carnes_aves_cruas', rev: 'cvs3', nome: 'Carnes e aves cruas', variantes: {
+      resfriado: { temp: '4°C',  dias: 3,  fonte: 'CVS 3/2026' },
+      congelado: { temp: '-18°C',dias: 30, fonte: 'CVS 3/2026 (freezer -18°C)' },
   }},
-  { id: 'pescado_cru', nome: 'Pescado cru', variantes: {
-      resfriado: { temp: '2°C',  dias: 3,  fonte: 'CVS 5/2013' },
-      congelado: { temp: '-18°C',dias: 90, fonte: 'CVS 5/2013' },
+  { id: 'carne_moida_temperada', rev: 'cvs3', nome: 'Carne moída / carnes temperadas', variantes: {
+      resfriado: { temp: '4°C',  dias: 2,  fonte: 'CVS 3/2026' },
+      congelado: { temp: '-18°C',dias: 30, fonte: 'CVS 3/2026 (freezer -18°C)' },
   }},
-  { id: 'laticinios', nome: 'Laticínios abertos', variantes: {
-      resfriado: { temp: '7°C',  dias: 5,  fonte: 'CVS 5/2013' },
-      congelado: { temp: '-18°C',dias: 90, fonte: 'CVS 5/2013' },
+  { id: 'pescado_cru', rev: 'cvs3', nome: 'Pescado cru', variantes: {
+      resfriado: { temp: '2°C',  dias: 3,  fonte: 'CVS 3/2026' },
+      congelado: { temp: '-18°C',dias: 30, fonte: 'CVS 3/2026 (freezer -18°C)' },
   }},
-  { id: 'maionese_derivados', nome: 'Maionese e molhos frios', variantes: {
-      resfriado: { temp: '4°C',  dias: 2,  fonte: 'CVS 5/2013' },
+  { id: 'pescado_cozido', rev: 'cvs3', nome: 'Pescado pós-cocção', variantes: {
+      resfriado: { temp: '2°C',  dias: 1,  fonte: 'CVS 3/2026' },
+      congelado: { temp: '-18°C',dias: 30, fonte: 'CVS 3/2026 (freezer -18°C)' },
   }},
-  { id: 'ovos', nome: 'Ovos', variantes: {
-      resfriado: { temp: '10°C', dias: 7,  fonte: 'CVS 5/2013' },
+  { id: 'laticinios', rev: 'cvs3', nome: 'Laticínios abertos', variantes: {
+      resfriado: { temp: '4°C',  dias: 3,  fonte: 'CVS 3/2026 regra geral — rótulo do fabricante prevalece' },
+      congelado: { temp: '-18°C',dias: 30, fonte: 'CVS 3/2026 (freezer -18°C)' },
   }},
-  { id: 'preparado_geral', nome: 'Preparado/produzido (geral)', variantes: {
-      resfriado: { temp: '4°C',  dias: 3,  fonte: 'RDC 216/2004 + CVS 5/2013' },
-      congelado: { temp: '-18°C',dias: 90, fonte: 'CVS 5/2013' },
+  { id: 'maionese_derivados', rev: 'cvs3', nome: 'Maionese e molhos frios', variantes: {
+      resfriado: { temp: '4°C',  dias: 2,  fonte: 'CVS 3/2026' },
   }},
-  { id: 'secos_graos', nome: 'Secos, grãos e temperos', variantes: {
-      seco: { temp: 'ambiente', dias: 60, fonte: 'prática de mercado — conferir rótulo do fabricante' },
+  { id: 'ovos', rev: 'cvs3', nome: 'Ovos', variantes: {
+      resfriado: { temp: '4°C',  dias: 3,  fonte: 'CVS 3/2026 regra geral — rótulo do fabricante prevalece' },
+  }},
+  { id: 'preparado_geral', rev: 'cvs3', nome: 'Preparado/produzido (geral)', variantes: {
+      resfriado: { temp: '4°C',  dias: 3,  fonte: 'CVS 3/2026' },
+      congelado: { temp: '-18°C',dias: 30, fonte: 'CVS 3/2026 (freezer -18°C)' },
+  }},
+  { id: 'secos_graos', rev: 'cvs3', nome: 'Secos, grãos e temperos', variantes: {
+      seco: { temp: 'ambiente', dias: 60, fonte: 'sem regra na CVS — conferir rótulo do fabricante' },
   }},
 ];
 
@@ -100,7 +109,7 @@ const ETIQUETAS_CATALOGO_DEFAULT = [
   {id:"cs_mignon_tiras_strogonoff",nome:"MIGNON TIRAS STROGONOFF",unidade:"kg",cat:"carnes_aves_cruas",grupo:"carnes",preco:79.9,origem:"custos",pendenteRevisao:false},
   {id:"cs_file_de_peito_de_frango",nome:"FILE DE PEITO DE FRANGO",unidade:"kg",cat:"carnes_aves_cruas",grupo:"frango",preco:18.53,origem:"custos",pendenteRevisao:false},
   {id:"cs_file_de_salmao_limpo_sem_pele",nome:"FILÉ DE SALMÃO LIMPO SEM PELE",unidade:"kg",cat:"pescado_cru",grupo:"pescados",preco:110.25,origem:"custos",pendenteRevisao:false},
-  {id:"cs_carne_moida_primeira",nome:"CARNE MOÍDA PRIMEIRA",unidade:"kg",cat:"carnes_aves_cruas",grupo:"carnes",preco:33.75,origem:"custos",pendenteRevisao:false},
+  {id:"cs_carne_moida_primeira",nome:"CARNE MOÍDA PRIMEIRA",unidade:"kg",cat:"carne_moida_temperada",grupo:"carnes",preco:33.75,origem:"custos",pendenteRevisao:false},
   {id:"cs_tilapia",nome:"TILAPIA",unidade:"kg",cat:"pescado_cru",grupo:"pescados",preco:45.63,origem:"custos",pendenteRevisao:false},
   {id:"cs_calabresa",nome:"CALABRESA",unidade:"kg",cat:"carnes_aves_cruas",grupo:"carnes",preco:24.2,origem:"custos",pendenteRevisao:false},
   {id:"cs_peito_de_peru",nome:"PEITO DE PERU",unidade:"kg",cat:"carnes_aves_cruas",grupo:"frango",preco:52.8,origem:"custos",pendenteRevisao:false},
@@ -179,7 +188,7 @@ const ETIQUETAS_CATALOGO_DEFAULT = [
   {id:"cs_mignon_salteado",nome:"Mignon salteado",unidade:"kg",cat:"carnes_aves_cruas",grupo:"carnes",preco:84.69,origem:"custos",pendenteRevisao:false},
   {id:"cs_feijao_preto_cozido",nome:"Feijão preto cozido",unidade:"kg",cat:"secos_graos",grupo:"secos",preco:4.5,origem:"custos",pendenteRevisao:false},
   {id:"cs_frango_grelhado",nome:"Frango grelhado",unidade:"kg",cat:"carnes_aves_cruas",grupo:"frango",preco:19.52,origem:"custos",pendenteRevisao:false},
-  {id:"cs_tilapia_grelhada",nome:"Tilápia grelhada",unidade:"kg",cat:"pescado_cru",grupo:"pescados",preco:48.98,origem:"custos",pendenteRevisao:false},
+  {id:"cs_tilapia_grelhada",nome:"Tilápia grelhada",unidade:"kg",cat:"pescado_cozido",grupo:"pescados",preco:48.98,origem:"custos",pendenteRevisao:false},
   {id:"cs_farofa_de_cenoura_linhaca_e_chia",nome:"Farofa de cenoura, linhaça e chia",unidade:"kg",cat:"hortifruti_higienizado",grupo:"hortifruti",preco:11.49,origem:"custos",pendenteRevisao:false},
   {id:"cs_arroz_integral_pronto",nome:"Arroz integral pronto",unidade:"kg",cat:"secos_graos",grupo:"secos",preco:3.16,origem:"custos",pendenteRevisao:false},
   {id:"cs_mix_de_sementes_e_amendoas",nome:"Mix de sementes e amêndoas",unidade:"kg",cat:"secos_graos",grupo:"secos",preco:42.5,origem:"custos",pendenteRevisao:false},
