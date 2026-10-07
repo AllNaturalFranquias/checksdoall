@@ -3244,3 +3244,29 @@ body { padding-bottom: 62px; }
   cursor: pointer; font-family: inherit; text-align: center;
 }
 .etq-estado-btn-active { border-color: var(--primary); color: var(--primary); background: #FFF7ED; }
+
+/* ── Responsáveis, modo (lote / uma por vez) e barra do lote ── */
+.etq-resp-box { display: flex; flex-wrap: wrap; gap: 6px; }
+.inv-modal-btn[disabled] { opacity: .4; pointer-events: none; }
+.etq-modo-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%;
+  background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 14px 16px;
+  margin-bottom: 10px; text-align: left; font-family: inherit; cursor: pointer;
+}
+.etq-modo-btn strong { font-size: 16px; color: #111827; }
+.etq-modo-btn span { font-size: 12px; color: #6b7280; line-height: 1.35; }
+.etq-modo-btn:active { border-color: var(--primary); background: #FFF7ED; }
+.etq-lote-bar {
+  position: fixed; left: 0; right: 0; bottom: 74px; z-index: 60; margin: 0 12px;
+  background: #1f2937; color: #fff; border-radius: 14px; padding: 10px 12px;
+  align-items: center; justify-content: space-between; gap: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3);
+}
+.etq-lote-info { display: flex; flex-direction: column; cursor: pointer; min-width: 0; }
+.etq-lote-info strong { font-size: 15px; }
+.etq-lote-info span { font-size: 11px; opacity: .75; }
+.etq-lote-print {
+  background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 10px 14px;
+  font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap;
+}
+.etq-lote-print[disabled] { opacity: .4; pointer-events: none; }
