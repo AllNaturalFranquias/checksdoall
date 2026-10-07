@@ -5956,6 +5956,7 @@ const ETQ_CLOUD_CATALOGO   = 'etiquetas_catalogo_' + UNIT_ID;
 const ETQ_CLOUD_PEDIDOS    = 'etiquetas_pedidos_' + UNIT_ID;
 const ETQ_CLOUD_PRINTER      = 'etiquetas_printer_' + UNIT_ID;       // { pareado: true } — flag informativo
 const ETQ_CLOUD_DESPERDICIO  = 'etiquetas_desperdicio_' + UNIT_ID;
+const ETQ_CLOUD_COLABS       = 'etiquetas_colaboradores_' + UNIT_ID;
 
 const ETQ_MOTIVOS_DESPERDICIO = [
   { id: 'vencido',      nome: 'Venceu / vencido' },
@@ -5970,6 +5971,7 @@ let etqState = {
   catalogo:     [],
   pedidos:      [],
   desperdicios: [],
+  colabs:       [],
   loaded:       false,
   loading:      false,
 };
@@ -5978,70 +5980,265 @@ let etqGrupoFiltro = null;
 let etqUsbDevice  = null;
 let etqPollTimer  = null;
 
-// ── Identificação do colaborador (PIN LOJA é compartilhado — precisa saber QUEM fez o quê) ──
-function etqNomeUsuario() {
-  const stored = (sessionStorage.getItem('etq_colaborador') || '').trim();
-  if (stored) return stored;
-  if (_session && _session.nome && !_session.isLoja) return _session.nome; // admin já tem nome próprio
-  return null;
+// ═══ Responsáveis, modo de etiquetagem (lote / uma por vez) e aviso diário ═══
+// PIN LOJA é compartilhado: o responsável é escolhido numa lista de nomes salvos, não digitado toda hora.
+
+// Hoje no fuso local (toISOString usa UTC e vira "amanhã" depois das 21h no Brasil)
+function etqIsoLocal(d) {
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-function etqEnsureColaborador(callback) {
-  const nome = etqNomeUsuario();
-  if (nome) { callback(); return; }
-  etqShowInlineModal(`
-    <h2>👤 Quem é você?</h2>
-    <p style="font-size:13px;color:#6b7280;margin-bottom:12px">O PIN Loja é compartilhado — precisamos saber quem fez cada etiqueta.</p>
-    <div class="nota-field">
-      <label>Seu nome</label>
-      <input id="etqColabNome" type="text" placeholder="Ex: Geovane" autocomplete="off"
-             onkeydown="if(event.key==='Enter')etqSalvarColaborador()">
+const ETQ_RESPONSAVEIS_PADRAO = ['Geovane', 'Suza', 'Kimberly', 'Luiz', 'Sandra', 'Eduardo',
+                                 'Shayron', 'Luana', 'Bruna', 'Willian', 'Ana', 'Lore'];
+
+// Lote em andamento (fica na sessão do navegador: se recarregar a página, não perde)
+let etqLote = (() => { try { return JSON.parse(sessionStorage.getItem('etq_lote') || 'null'); } catch (e) { return null; } })() || { resp: null, itens: [] };
+function etqSalvarLoteSessao() { try { sessionStorage.setItem('etq_lote', JSON.stringify(etqLote)); } catch (e) {} }
+function etqModo() { return sessionStorage.getItem('etq_modo'); } // 'lote' | 'individual' | null
+
+async function etqUpdateColabs(mutate) {
+  const fresh = await etqFetchKV(ETQ_CLOUD_COLABS);
+  const lista = (fresh && fresh.itens) ? fresh.itens : etqState.colabs;
+  mutate(lista);
+  lista.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  etqState.colabs = lista;
+  await etqSaveKV(ETQ_CLOUD_COLABS, lista);
+}
+
+// Caixa de escolha do responsável (botões com os nomes salvos + campo pra incluir um novo)
+function etqRespBoxHtml() {
+  return `<div id="etqRespBox"></div>`;
+}
+function etqRenderRespBox(selecionado) {
+  const box = document.getElementById('etqRespBox');
+  if (!box) return;
+  window._etqResp = selecionado || null;
+  box.innerHTML = `
+    <div class="etq-resp-box">
+      ${etqState.colabs.map(n => `<button type="button" class="etq-chip${n === selecionado ? ' etq-chip-active' : ''}" data-n="${escHtml(n)}" onclick="etqPickResp(this)">${escHtml(n)}</button>`).join('')}
     </div>
-    <button class="inv-modal-btn" onclick="etqSalvarColaborador()">Continuar</button>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <input id="etqRespNovo" type="text" placeholder="Outro nome..." autocomplete="off" style="flex:1;padding:8px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-family:inherit;font-size:14px"
+             onkeydown="if(event.key==='Enter'){etqAddRespInline();}">
+      <button type="button" class="etq-reprint-btn" onclick="etqAddRespInline()" title="Salvar este nome">+</button>
+    </div>`;
+  etqAtualizarBotoesResp();
+}
+function etqPickResp(btn) {
+  window._etqResp = btn.dataset.n;
+  document.querySelectorAll('#etqRespBox .etq-chip').forEach(b => b.classList.toggle('etq-chip-active', b === btn));
+  etqAtualizarBotoesResp();
+}
+function etqAtualizarBotoesResp() {
+  ['etqGerarBtn', 'etqIniciarLoteBtn', 'etqSalvarDespBtn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = !window._etqResp;
+  });
+}
+async function etqAddRespInline() {
+  const inp = document.getElementById('etqRespNovo');
+  const nome = inp ? inp.value.trim().replace(/\s+/g, ' ') : '';
+  if (!nome) return;
+  const existente = etqState.colabs.find(n => normalizeForMatch(n) === normalizeForMatch(nome));
+  if (!existente) await etqUpdateColabs(l => l.push(nome.charAt(0).toUpperCase() + nome.slice(1)));
+  etqRenderRespBox(existente || etqState.colabs.find(n => normalizeForMatch(n) === normalizeForMatch(nome)));
+}
+
+// Garante que já escolheram o modo (e o responsável, se for lote) antes de seguir
+function etqEnsureModo(cb) {
+  const modo = etqModo();
+  if (!modo) { etqAskModo(cb); return; }
+  if (modo === 'lote' && !etqLote.resp) { etqAskRespLote(cb); return; }
+  cb();
+}
+function etqAskModo(cb) {
+  window._etqPendingCb = cb || null;
+  etqShowInlineModal(`
+    <h2>Como vai etiquetar?</h2>
+    <button class="etq-modo-btn" onclick="etqSetModo('lote')"><strong>📦 Em lote</strong><span>Vou juntar várias etiquetas e imprimir tudo de uma vez, com um responsável só.</span></button>
+    <button class="etq-modo-btn" onclick="etqSetModo('individual')"><strong>1️⃣ Uma por vez</strong><span>Imprimo cada etiqueta na hora e escolho o responsável em cada uma.</span></button>
+  `);
+}
+function etqSetModo(modo) {
+  sessionStorage.setItem('etq_modo', modo);
+  const cb = window._etqPendingCb; window._etqPendingCb = null;
+  if (modo === 'individual') { etqLote = { resp: null, itens: [] }; etqSalvarLoteSessao(); etqCloseInlineModal(); etqRenderModoBadge(); etqRenderLoteBar(); if (cb) cb(); return; }
+  etqAskRespLote(cb);
+}
+function etqAskRespLote(cb) {
+  window._etqPendingCb = cb || null;
+  etqShowInlineModal(`
+    <h2>📦 Responsável pelo lote</h2>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:10px">Todas as etiquetas deste lote saem no nome dele.</p>
+    ${etqRespBoxHtml()}
+    <button id="etqIniciarLoteBtn" class="inv-modal-btn" style="margin-top:12px" disabled onclick="etqIniciarLote()">Começar lote</button>
     <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Cancelar</button>
   `);
-  window._etqPendingAfterColaborador = callback;
-  setTimeout(() => document.getElementById('etqColabNome')?.focus(), 100);
+  etqRenderRespBox(etqLote.resp);
 }
-
-function etqSalvarColaborador() {
-  const nome = document.getElementById('etqColabNome').value.trim();
-  if (!nome) return;
-  sessionStorage.setItem('etq_colaborador', nome);
+function etqIniciarLote() {
+  if (!window._etqResp) return;
+  etqLote.resp = window._etqResp;
+  etqSalvarLoteSessao();
   etqCloseInlineModal();
-  etqRenderColaboradorBadge();
-  const cb = window._etqPendingAfterColaborador;
-  window._etqPendingAfterColaborador = null;
+  etqRenderModoBadge(); etqRenderLoteBar();
+  const cb = window._etqPendingCb; window._etqPendingCb = null;
   if (cb) cb();
 }
-
-function etqTrocarColaborador() {
-  sessionStorage.removeItem('etq_colaborador');
-  etqEnsureColaborador(() => {});
+function etqTrocarModo() {
+  if (etqLote.itens.length > 0 && !confirm(`O lote tem ${etqLote.itens.length} etiqueta(s) ainda não impressas. Descartar e trocar?`)) return;
+  sessionStorage.removeItem('etq_modo');
+  etqLote = { resp: null, itens: [] }; etqSalvarLoteSessao();
+  etqAskModo(() => { etqRenderModoBadge(); etqRenderLoteBar(); });
 }
-
-function etqRenderColaboradorBadge() {
+function etqRenderModoBadge() {
   const el = document.getElementById('etqColabBadge');
   if (!el) return;
-  const nome = etqNomeUsuario();
-  el.innerHTML = nome
-    ? `<span onclick="etqTrocarColaborador()">👤 ${escHtml(nome)} <em>(trocar)</em></span>`
-    : '';
+  const modo = etqModo();
+  el.innerHTML = !modo ? '' : `<span onclick="etqTrocarModo()">${modo === 'lote' ? `📦 Lote · ${escHtml(etqLote.resp || '—')}` : '1️⃣ Uma por vez'} <em>(trocar)</em></span>`;
+}
+
+// Barra fixa do lote: quantas etiquetas acumuladas + imprimir tudo
+function etqRenderLoteBar() {
+  const el = document.getElementById('etqLoteBar');
+  if (!el) return;
+  if (etqModo() !== 'lote' || !etqLote.resp) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  const n = etqLote.itens.length;
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <div class="etq-lote-info" onclick="etqVerLote()"><strong>📦 ${n} etiqueta${n === 1 ? '' : 's'}</strong><span>lote de ${escHtml(etqLote.resp)} · toque pra ver</span></div>
+    <button class="etq-lote-print" ${n === 0 ? 'disabled' : ''} onclick="etqImprimirLote()">🖨️ Imprimir todas</button>`;
+}
+function etqAdicionarAoLote(itemId) {
+  const item = etqState.catalogo.find(i => i.id === itemId);
+  if (!item) return;
+  etqLote.itens.push({
+    itemId, produto: item.nome,
+    lote: document.getElementById('etqLote').value.trim() || '—',
+    manipulacao: document.getElementById('etqDataManip').value,
+    validade: document.getElementById('etqDataValidade').value,
+    armazenamento: window._etqEstadoAtual || 'resfriado',
+  });
+  etqSalvarLoteSessao();
+  etqCloseInlineModal();
+  etqRenderLoteBar();
+  showToast(`Adicionada ao lote (${etqLote.itens.length}) ✓`);
+}
+function etqVerLote() {
+  const linhas = etqLote.itens.map((x, i) => `
+    <div class="etq-hist-row">
+      <div><strong>${escHtml(x.produto)}</strong>
+        <div class="etq-hist-meta">${escHtml(etqArmazenamentoNome(x.armazenamento))} · manip. ${etqFmtData(x.manipulacao)} · validade ${etqFmtData(x.validade)}</div></div>
+      <button class="etq-reprint-btn" onclick="etqRemoverDoLote(${i})" title="Tirar do lote">✕</button>
+    </div>`).join('');
+  etqShowInlineModal(`
+    <h2>📦 Lote de ${escHtml(etqLote.resp || '')}</h2>
+    <div class="etq-hist-list">${linhas || '<p class="etq-hint">Nenhuma etiqueta no lote ainda. Escolha um produto e toque em "Adicionar ao lote".</p>'}</div>
+    ${etqLote.itens.length ? '<button class="inv-modal-btn" onclick="etqImprimirLote()">🖨️ Imprimir todas</button>' : ''}
+    <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Fechar</button>
+  `, true);
+}
+function etqRemoverDoLote(i) {
+  etqLote.itens.splice(i, 1); etqSalvarLoteSessao(); etqRenderLoteBar(); etqVerLote();
+}
+async function etqImprimirLote() {
+  if (!etqLote.itens.length || !etqLote.resp) return;
+  const agora = Date.now();
+  const loteId = 'lt_' + agora.toString(36);
+  const pedidos = etqLote.itens.map((x, i) => {
+    const p = {
+      id: 'p_' + (agora + i).toString(36) + Math.random().toString(36).slice(2, 6),
+      produto: x.produto, lote: x.lote, manipulacao: x.manipulacao, validade: x.validade,
+      armazenamento: x.armazenamento, criadoPor: etqLote.resp, modo: 'lote', loteId,
+      criadoEm: new Date(agora + i).toISOString(), status: 'pendente',
+    };
+    p.zpl = etqBuildZPL(p);
+    return p;
+  });
+  const total = pedidos.length;
+  etqLote.itens = []; etqSalvarLoteSessao();
+  etqCloseInlineModal();
+  await etqUpdatePedidos(l => { for (const p of pedidos) l.unshift(p); }); // 1ª adicionada fica mais antiga → imprime primeiro
+  if (etqUsbDevice) { for (const p of pedidos) await etqPrintPedido(p); }
+  etqRenderLoteBar();
+  showToast(`${total} etiqueta${total === 1 ? '' : 's'} enviada${total === 1 ? '' : 's'} pra impressão ✓`);
+  etqRenderHome();
+}
+
+// Gestão dos nomes (gerência)
+function etqOpenResponsaveis() {
+  etqShowInlineModal(`
+    <h2>👥 Responsáveis</h2>
+    <div class="etq-hist-list">${etqState.colabs.map((n, i) => `
+      <div class="etq-hist-row"><strong>${escHtml(n)}</strong>
+        <button class="etq-reprint-btn" onclick="etqRemoverResp(${i})" title="Remover">✕</button></div>`).join('') || '<p class="etq-hint">Nenhum nome salvo.</p>'}</div>
+    <div class="nota-field"><label>Novo nome</label>
+      <input id="etqRespAdmNovo" type="text" autocomplete="off" onkeydown="if(event.key==='Enter')etqAddRespAdm()"></div>
+    <button class="inv-modal-btn" onclick="etqAddRespAdm()">Adicionar</button>
+    <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Fechar</button>
+  `, true);
+}
+async function etqAddRespAdm() {
+  const nome = document.getElementById('etqRespAdmNovo').value.trim().replace(/\s+/g, ' ');
+  if (!nome) return;
+  if (!etqState.colabs.some(n => normalizeForMatch(n) === normalizeForMatch(nome)))
+    await etqUpdateColabs(l => l.push(nome.charAt(0).toUpperCase() + nome.slice(1)));
+  etqOpenResponsaveis();
+}
+async function etqRemoverResp(i) {
+  const nome = etqState.colabs[i];
+  if (!nome || !confirm(`Remover "${nome}" da lista de responsáveis? As etiquetas antigas continuam no histórico.`)) return;
+  await etqUpdateColabs(l => { const k = l.indexOf(nome); if (k >= 0) l.splice(k, 1); });
+  etqOpenResponsaveis();
+}
+
+// Aviso diário: 1ª vez que abre a aba Etiquetas no dia, com itens vencendo/vencidos → só fecha com "OK, ciente"
+function etqPopupDiario(depois) {
+  const chave = `etq_ciente_${UNIT_ID}_${etqIsoLocal()}`;
+  let jaViu = false; try { jaViu = !!localStorage.getItem(chave); } catch (e) {}
+  const b = etqGetBuckets();
+  const lista = [...b.vencidos, ...b.vencendo].sort((x, y) => (x.validade || '').localeCompare(y.validade || ''));
+  if (jaViu || lista.length === 0) { if (depois) depois(); return; }
+  const dow = new Date().getDay();
+  const quando = dow === 6 ? 'hoje ou amanhã (domingo a loja fecha)' : dow === 1 ? 'hoje ou venceram no domingo' : 'hoje';
+  const nV = b.vencendo.length, nX = b.vencidos.length;
+  const linhas = lista.slice(0, 15).map(p => `
+    <div class="etq-hist-row"><div><strong>${escHtml(p.produto)}</strong>
+      <div class="etq-hist-meta">validade ${etqFmtData(p.validade)} · lote ${escHtml(p.lote)} · ${escHtml(p.criadoPor || '')}</div></div>
+      ${p.validade < etqIsoLocal() ? '<span style="color:#dc2626;font-weight:700;font-size:12px">VENCIDA</span>' : ''}</div>`).join('');
+  etqShowInlineModal(`
+    <h2>⚠️ Etiquetas vencendo</h2>
+    <p style="font-size:15px;margin:0 0 10px"><strong>${nV}</strong> etiqueta${nV === 1 ? '' : 's'} vence${nV === 1 ? '' : 'm'} ${quando}${nX ? ` e <strong style="color:#dc2626">${nX}</strong> já ${nX === 1 ? 'está vencida' : 'estão vencidas'}` : ''}.</p>
+    <div class="etq-hist-list">${linhas}${lista.length > 15 ? `<p class="etq-hint">+ ${lista.length - 15} outras — veja no painel.</p>` : ''}</div>
+    <p style="font-size:12px;color:#6b7280;margin:8px 0">Dê baixa nos itens no painel (✓ usei / 🗑️ descartei).</p>
+    <button class="inv-modal-btn" onclick="etqCienteDiario('${chave}')">OK, ciente</button>
+  `, true);
+  window._etqPendingCb = depois || null;
+}
+function etqCienteDiario(chave) {
+  try { localStorage.setItem(chave, new Date().toISOString()); } catch (e) {}
+  etqCloseInlineModal();
+  const cb = window._etqPendingCb; window._etqPendingCb = null;
+  if (cb) cb();
 }
 
 async function loadEtiquetasData() {
   if (etqState.loaded || etqState.loading) return;
   etqState.loading = true;
   try {
-    const [catRows, catalogoRows, pedidosRows, desperdicioRows] = await Promise.all([
+    const [catRows, catalogoRows, pedidosRows, desperdicioRows, colabRows] = await Promise.all([
       etqFetchKV(ETQ_CLOUD_CATEGORIAS),
       etqFetchKV(ETQ_CLOUD_CATALOGO),
       etqFetchKV(ETQ_CLOUD_PEDIDOS),
       etqFetchKV(ETQ_CLOUD_DESPERDICIO),
+      etqFetchKV(ETQ_CLOUD_COLABS),
     ]);
 
     // Formato antigo na nuvem (sem "variantes"/"grupo") — reseed com o default novo.
-    const catOk      = catRows && catRows.itens && catRows.itens[0] && catRows.itens[0].variantes;
+    // Tabela de validade atual = mesma revisão e mesmo nº de categorias do arquivo (senão reseeda com a CVS 3/2026)
+    const catOk      = catRows && catRows.itens && catRows.itens.length === ETIQUETAS_CATEGORIAS_DEFAULT.length
+                       && catRows.itens.every(c => c.variantes && c.rev === 'cvs3');
     const catalogoOk = catalogoRows && catalogoRows.itens && catalogoRows.itens.some(i => i.grupo) && catalogoRows.itens.some(i => i.preco != null);
 
     etqState.categorias   = catOk      ? catRows.itens      : ETIQUETAS_CATEGORIAS_DEFAULT.slice();
@@ -6050,13 +6247,28 @@ async function loadEtiquetasData() {
     etqState.desperdicios = (desperdicioRows && desperdicioRows.itens) || [];
 
     // Primeira vez ou formato antigo — (re)semeia com os defaults
+    // Nomes dos responsáveis: 1ª vez semeia com a equipe do checklist (gerência ajusta em "Responsáveis")
+    etqState.colabs = (colabRows && colabRows.itens) ? colabRows.itens : ETQ_RESPONSAVEIS_PADRAO.slice().sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    if (!colabRows) await etqSaveKV(ETQ_CLOUD_COLABS, etqState.colabs);
+
+    // Vincula sozinho (nome idêntico) os itens ao estoque, pra puxar o preço das notas
+    let vinculou = etqAutoVincularTodos();
+
+    // Itens cuja categoria mudou com a CVS 3/2026 (só se ainda estiverem na categoria antiga)
+    for (const [id, de, para] of [['cs_carne_moida_primeira', 'carnes_aves_cruas', 'carne_moida_temperada'],
+                                  ['cs_tilapia_grelhada', 'pescado_cru', 'pescado_cozido']]) {
+      const it = etqState.catalogo.find(i => i.id === id);
+      if (it && it.cat === de) { it.cat = para; vinculou = true; }
+    }
+
     if (!catOk)      await etqSaveKV(ETQ_CLOUD_CATEGORIAS, etqState.categorias);
-    if (!catalogoOk) await etqSaveKV(ETQ_CLOUD_CATALOGO, etqState.catalogo);
+    if (!catalogoOk || vinculou) await etqSaveKV(ETQ_CLOUD_CATALOGO, etqState.catalogo);
   } catch (e) {
     etqState.categorias   = ETIQUETAS_CATEGORIAS_DEFAULT.slice();
     etqState.catalogo     = ETIQUETAS_CATALOGO_DEFAULT.slice();
     etqState.pedidos      = [];
     etqState.desperdicios = [];
+    etqState.colabs       = ETQ_RESPONSAVEIS_PADRAO.slice().sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }
   etqState.loaded  = true;
   etqState.loading = false;
@@ -6097,6 +6309,8 @@ async function renderEtiquetas() {
   el.innerHTML = '<p style="padding:30px;text-align:center;color:#9ca3af">Carregando…</p>';
   await loadEtiquetasData();
   etqRenderHome();
+  // 1º acesso do dia: aviso de vencimentos (só fecha com "OK, ciente"); depois pergunta o modo (lote / uma por vez)
+  etqPopupDiario(() => { if (!etqModo()) etqAskModo(() => { etqRenderModoBadge(); etqRenderLoteBar(); }); });
 }
 
 let etqActiveBucket = null;
@@ -6126,13 +6340,17 @@ function etqRenderHome() {
       <div id="etqResultsList" class="etq-results"></div>
 
       <div class="etq-footer-actions">
-        <button class="config-btn" onclick="etqEnsureColaborador(() => etqOpenDesperdicio(null))">🗑️ Registrar desperdício / erro</button>
+        <button class="config-btn" onclick="etqOpenDesperdicio(null)">🗑️ Registrar desperdício / erro</button>
+        ${IS_ADMIN ? '<button class="config-btn" onclick="etqOpenGerenciar()">✏️ Gerenciar produtos</button>' : ''}
+        ${IS_ADMIN ? '<button class="config-btn" onclick="etqOpenResponsaveis()">👥 Responsáveis</button>' : ''}
         <button class="config-btn" onclick="etqOpenHistorico()">📜 Histórico de etiquetas</button>
         <button class="config-btn" onclick="etqPairPrinter()">${etqUsbDevice ? '🖨️ Impressora pareada ✓' : '🖨️ Parear impressora'}</button>
       </div>
     </div>
+    <div id="etqLoteBar" class="etq-lote-bar" style="display:none"></div>
   `;
-  etqRenderColaboradorBadge();
+  etqRenderModoBadge();
+  etqRenderLoteBar();
   etqRenderDashboard();
   etqRenderResults();
 }
@@ -6146,7 +6364,7 @@ function etqSetGrupoFiltro(grupoId) {
 function etqGetBuckets() {
   const hoje = new Date();
   hoje.setHours(0,0,0,0);
-  const isoHoje = hoje.toISOString().slice(0,10);
+  const isoHoje = etqIsoLocal(hoje);
 
   const alvoVencendo = etqDiasAlvoHoje(); // já trata sábado/domingo
 
@@ -6155,10 +6373,10 @@ function etqGetBuckets() {
   const vencidos  = ativos.filter(p => p.validade < isoHoje);
   const vencendo  = ativos.filter(p => p.validade >= isoHoje && alvoVencendo.has(p.validade));
   const pendImpressao = etqState.pedidos.filter(p => p.status === 'pendente' && !p.tratado);
-  const pendRevisao   = etqState.catalogo.filter(i => i.pendenteRevisao);
+  const pendRevisao   = etqState.catalogo.filter(i => i.pendenteRevisao && i.ativo !== false);
 
   const seteDiasAtras = new Date(hoje); seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
-  const isoSeteDias = seteDiasAtras.toISOString().slice(0,10);
+  const isoSeteDias = etqIsoLocal(seteDiasAtras);
   const desperdicioSemana = etqState.desperdicios
     .filter(d => (d.criadoEm || '').slice(0,10) >= isoSeteDias)
     .sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''));
@@ -6170,7 +6388,7 @@ function etqDiasAlvoHoje() {
   const hoje = new Date();
   hoje.setHours(0,0,0,0);
   const dow = hoje.getDay(); // 0=domingo, 6=sábado
-  const iso = d => d.toISOString().slice(0,10);
+  const iso = etqIsoLocal;
   const alvo = new Set([iso(hoje)]);
   if (dow === 6) { const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1); alvo.add(iso(amanha)); }
   if (dow === 1) { const ontem  = new Date(hoje); ontem.setDate(ontem.getDate()-1);  alvo.add(iso(ontem));  }
@@ -6268,7 +6486,7 @@ function etqRenderBucketDetail() {
           ${isExpiryBucket ? `
             <div style="display:flex;gap:6px">
               <button class="etq-reprint-btn" onclick="etqMarcarTratado('${p.id}')" title="Usei / tratei sem desperdício">✓</button>
-              <button class="etq-reprint-btn" onclick="etqEnsureColaborador(() => etqOpenDesperdicio('${p.id}'))" title="Registrar como desperdício">🗑️</button>
+              <button class="etq-reprint-btn" onclick="etqOpenDesperdicio('${p.id}')" title="Registrar como desperdício">🗑️</button>
             </div>
           ` : `<button class="etq-reprint-btn" onclick="etqMarcarTratado('${p.id}')" title="Marcar como tratado">✓</button>`}
         </div>`).join('')}
@@ -6282,9 +6500,10 @@ function etqMotivoNome(id) {
 async function etqAjustarCategoriaCatalogo(itemId, novaCat) {
   const item = etqState.catalogo.find(i => i.id === itemId);
   if (!item) return;
-  item.cat = novaCat;
-  item.pendenteRevisao = false;
-  await etqSaveKV(ETQ_CLOUD_CATALOGO, etqState.catalogo);
+  await etqUpdateCatalogo(l => {
+    const x = l.find(i => i.id === itemId);
+    if (x) { x.cat = novaCat; x.pendenteRevisao = false; }
+  });
   showToast('Categoria atualizada ✓');
   etqRenderDashboard();
 }
@@ -6313,7 +6532,7 @@ async function etqMarcarTratado(pedidoId) {
 // Acha o item do catálogo pelo nome exato (usado pra puxar o preço automaticamente)
 function etqCatalogoPorNome(nome) {
   const n = normalizeForMatch(nome || '');
-  return etqState.catalogo.find(i => normalizeForMatch(i.nome) === n);
+  return etqState.catalogo.find(i => i.ativo !== false && normalizeForMatch(i.nome) === n);
 }
 
 function etqOpenDesperdicio(pedidoId) {
@@ -6321,7 +6540,8 @@ function etqOpenDesperdicio(pedidoId) {
   const motivoOptions = ETQ_MOTIVOS_DESPERDICIO.map(m =>
     `<option value="${m.id}" ${pedido && m.id === 'vencido' ? 'selected' : ''}>${escHtml(m.nome)}</option>`).join('');
   const itemCatalogo = pedido ? etqCatalogoPorNome(pedido.produto) : null;
-  const precoInicial = itemCatalogo && itemCatalogo.preco != null ? itemCatalogo.preco : '';
+  const infoPreco    = itemCatalogo ? etqPrecoItem(itemCatalogo) : null;
+  const precoInicial = infoPreco && infoPreco.preco != null ? infoPreco.preco : '';
 
   etqShowInlineModal(`
     <h2>🗑️ Registrar Desperdício</h2>
@@ -6337,7 +6557,7 @@ function etqOpenDesperdicio(pedidoId) {
     </div>
     <div class="nota-field">
       <label>Unidade</label>
-      <input id="etqDespUnidade" type="text" placeholder="kg, un, porção..." value="${escHtml(itemCatalogo ? itemCatalogo.unidade : 'un')}" autocomplete="off">
+      <input id="etqDespUnidade" type="text" placeholder="kg, un, porção..." value="${escHtml(infoPreco ? infoPreco.unidade : 'un')}" autocomplete="off">
     </div>
     <div class="nota-field">
       <label>Preço unitário (R$) <span style="font-weight:400;color:#9ca3af">— opcional, calcula o prejuízo</span></label>
@@ -6352,9 +6572,11 @@ function etqOpenDesperdicio(pedidoId) {
       <label>Observação (opcional)</label>
       <input id="etqDespObs" type="text" placeholder="Detalhe rápido..." autocomplete="off">
     </div>
-    <button class="inv-modal-btn" onclick="etqSalvarDesperdicio()">Salvar</button>
+    <div class="nota-field"><label>Responsável</label>${etqRespBoxHtml()}</div>
+    <button id="etqSalvarDespBtn" class="inv-modal-btn" disabled onclick="etqSalvarDesperdicio()">Salvar</button>
     <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Cancelar</button>
-  `);
+  `, true);
+  etqRenderRespBox(etqModo() === 'lote' ? etqLote.resp : null);
   etqRecalcValorDesperdicio();
 }
 
@@ -6363,8 +6585,9 @@ function etqAutoPrecoDesperdicio(nome) {
   const item = etqCatalogoPorNome(nome);
   const precoEl = document.getElementById('etqDespPreco');
   const unidadeEl = document.getElementById('etqDespUnidade');
-  if (item && precoEl && !precoEl.value) precoEl.value = item.preco != null ? item.preco : '';
-  if (item && unidadeEl) unidadeEl.value = item.unidade;
+  const info = item ? etqPrecoItem(item) : null;
+  if (info && precoEl && !precoEl.value) precoEl.value = info.preco != null ? info.preco : '';
+  if (info && unidadeEl) unidadeEl.value = info.unidade;
   etqRecalcValorDesperdicio();
 }
 
@@ -6390,6 +6613,7 @@ async function etqSalvarDesperdicio() {
   const obs      = document.getElementById('etqDespObs').value.trim();
 
   if (!produto) { showToast('Digite o produto'); return; }
+  if (!window._etqResp) { showToast('Escolha o responsável'); return; }
 
   const qtdNum = parseFloat(qtd.replace(',','.'));
   const valorPerdido = (qtdNum > 0 && preco > 0) ? Math.round(qtdNum * preco * 100) / 100 : null;
@@ -6401,7 +6625,7 @@ async function etqSalvarDesperdicio() {
     valorPerdido,
     motivo, obs,
     pedidoOrigemId: pedidoId,
-    responsavel: etqNomeUsuario(),
+    responsavel: window._etqResp,
     criadoEm: new Date().toISOString(),
   };
   etqState.desperdicios.unshift(registro);
@@ -6429,12 +6653,12 @@ function etqRenderResults() {
 
   if (!q && !etqGrupoFiltro) { list.innerHTML = '<p class="etq-hint">Digite pra buscar ou escolha um grupo acima.</p>'; return; }
 
-  let matches = etqState.catalogo.filter(i => !q || normalizeForMatch(i.nome).includes(q));
+  let matches = etqState.catalogo.filter(i => i.ativo !== false && (!q || normalizeForMatch(i.nome).includes(q)));
   if (etqGrupoFiltro) matches = matches.filter(i => (i.grupo || 'outros') === etqGrupoFiltro);
   matches = matches.slice(0, 40);
 
   let html = matches.map(item => `
-    <div class="etq-item-row" onclick="etqEnsureColaborador(() => etqOpenPrintModal('${item.id}'))">
+    <div class="etq-item-row" onclick="etqEnsureModo(() => etqOpenPrintModal('${item.id}'))">
       <span class="etq-item-nome">${escHtml(item.nome)}${item.pendenteRevisao ? ' <em class="etq-badge-revisar">revisar</em>' : ''}</span>
       <span class="etq-item-cat">${escHtml(etqCategoriaById(item.cat).nome)}</span>
     </div>
@@ -6442,7 +6666,7 @@ function etqRenderResults() {
 
   if (q) {
     html += `
-      <div class="etq-item-row etq-item-new" onclick="etqEnsureColaborador(() => etqOpenCadastroRapido(document.getElementById('etqNewItemName').textContent))">
+      <div class="etq-item-row etq-item-new" onclick="etqEnsureModo(() => etqOpenCadastroRapido(document.getElementById('etqNewItemName').textContent))">
         <span>➕ Cadastrar "<span id="etqNewItemName">${escHtml(etqSearchTerm)}</span>" como novo produto</span>
       </div>`;
   }
@@ -6457,7 +6681,7 @@ function etqGetAlertaHoje() {
   const dow = hoje.getDay(); // 0=domingo, 6=sábado
 
   const alvo = new Set();
-  const iso = d => d.toISOString().slice(0,10);
+  const iso = etqIsoLocal;
   alvo.add(iso(hoje));
   if (dow === 6) { const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1); alvo.add(iso(amanha)); } // sábado: inclui domingo
   if (dow === 1) { const ontem  = new Date(hoje); ontem.setDate(ontem.getDate()-1);  alvo.add(iso(ontem));  } // segunda: catch-up domingo
@@ -6473,7 +6697,9 @@ function etqFmtData(iso) {
 
 // ── Auto-categorização por palavra-chave (mesma heurística usada pra importar o CUSTOS) ──
 const ETQ_AUTOCAT_REGRAS = [
+  { cat: 'pescado_cozido',    grupo: 'pescados',   kws: ['tilapia grelhad','tilápia grelhad','peixe grelhad','salmao grelhad','salmão grelhad','peixe assad','peixe frit','tilapia assad','tilápia assad','pescado cozid','pescado grelhad'] },
   { cat: 'pescado_cru',       grupo: 'pescados',   kws: ['tilapia','tilápia','peixe','salmao','salmão','camarao','camarão'] },
+  { cat: 'carne_moida_temperada', grupo: 'carnes', kws: ['carne moida','carne moída','moida','moída','temperad','espeto','bife rolê','bife role'] },
   { cat: 'carnes_aves_cruas', grupo: 'frango',      kws: ['frango','peito de peru','peru'] },
   { cat: 'carnes_aves_cruas', grupo: 'carnes',      kws: ['mignon','bacon','calabresa','costelinha','carne','posta','presunto'] },
   { cat: 'ovos',              grupo: 'hortifruti',  kws: ['ovo'] },
@@ -6515,8 +6741,8 @@ async function etqSaveCadastroRapido() {
     .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') + '_' + Date.now().toString(36);
 
   const item = { id, nome, unidade: 'un', cat, grupo, origem: 'cadastro_loja', pendenteRevisao: true };
-  etqState.catalogo.push(item);
-  await etqSaveKV(ETQ_CLOUD_CATALOGO, etqState.catalogo);
+  etqAutoVincularItem(item);
+  await etqUpdateCatalogo(l => l.push(item));
   etqCloseInlineModal();
   showToast(`Produto cadastrado como "${etqCategoriaById(cat).nome}" ✓`);
   etqOpenPrintModal(id);
@@ -6543,7 +6769,8 @@ function etqOpenPrintModal(itemId) {
   const cat = etqCategoriaById(item.cat);
   const estadoInicial = etqEstadoDefault(cat);
   const hoje = new Date();
-  const isoHoje = hoje.toISOString().slice(0,10);
+  const isoHoje = etqIsoLocal(hoje);
+  const modoLote = etqModo() === 'lote';
 
   etqShowInlineModal(`
     <h2>${escHtml(item.nome)}</h2>
@@ -6570,11 +6797,16 @@ function etqOpenPrintModal(itemId) {
       <label>Lote (opcional)</label>
       <input id="etqLote" type="text" placeholder="Ex: L001" autocomplete="off">
     </div>
-    <button class="inv-modal-btn" onclick="etqConfirmarPedido('${item.id}')">🖨️ Gerar Etiqueta</button>
+    ${modoLote
+      ? `<p style="font-size:12px;color:#6b7280;margin:0 0 8px">Responsável do lote: <strong>${escHtml(etqLote.resp || '')}</strong></p>
+         <button class="inv-modal-btn" onclick="etqAdicionarAoLote('${item.id}')">➕ Adicionar ao lote</button>`
+      : `<div class="nota-field"><label>Responsável por esta etiqueta</label>${etqRespBoxHtml()}</div>
+         <button id="etqGerarBtn" class="inv-modal-btn" disabled onclick="etqConfirmarPedido('${item.id}')">🖨️ Gerar Etiqueta</button>`}
     <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Cancelar</button>
   `);
   window._etqEstadoAtual = estadoInicial;
   etqRecalcValidade();
+  if (!modoLote) etqRenderRespBox(null); // uma por vez: sempre pergunta o responsável
 }
 
 function etqSelecionarEstado(estadoId) {
@@ -6597,13 +6829,14 @@ function etqRecalcValidade() {
 
   const d = new Date(manipEl.value + 'T00:00:00');
   d.setDate(d.getDate() + (v.dias || 3));
-  validEl.value = d.toISOString().slice(0,10);
+  validEl.value = etqIsoLocal(d);
   if (infoEl) infoEl.textContent = `${cat.nome} · ${v.temp} · ${v.dias} dias (${v.fonte})`;
 }
 
 async function etqConfirmarPedido(itemId) {
   const item = etqState.catalogo.find(i => i.id === itemId);
   if (!item) return;
+  if (!window._etqResp) { showToast('Escolha o responsável'); return; }
   const dataManip    = document.getElementById('etqDataManip').value;
   const dataValidade = document.getElementById('etqDataValidade').value;
   const lote          = document.getElementById('etqLote').value.trim();
@@ -6616,7 +6849,8 @@ async function etqConfirmarPedido(itemId) {
     manipulacao: dataManip,
     validade: dataValidade,
     armazenamento,
-    criadoPor: etqNomeUsuario(),
+    criadoPor: window._etqResp,
+    modo: 'individual',
     criadoEm: new Date().toISOString(),
     status: 'pendente', // pendente | impresso
   };
@@ -6631,6 +6865,7 @@ async function etqConfirmarPedido(itemId) {
   } else {
     showToast('Etiqueta enviada pra fila de impressão ✓');
   }
+  window._etqResp = null; // a próxima etiqueta pergunta o responsável de novo
   etqRenderHome();
 }
 
@@ -6787,4 +7022,197 @@ function startEtiquetasPolling() {
     const el = document.getElementById('etiquetasContent');
     if (el && getCurrentView && getCurrentView() === 'etiquetas') etqRenderHome();
   }, 8000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── Gerenciar produtos (gerência): editar nome, criar, arquivar, ──
+// ── e preço automático puxado das notas fiscais do estoque ───────
+// ═══════════════════════════════════════════════════════════════
+
+// O catálogo também é gravado por outros aparelhos (cadastro rápido) — re-lê antes de gravar.
+async function etqUpdateCatalogo(mutate) {
+  const fresh = await etqFetchKV(ETQ_CLOUD_CATALOGO);
+  const lista = (fresh && fresh.itens) ? fresh.itens : etqState.catalogo;
+  mutate(lista);
+  etqState.catalogo = lista;
+  await etqSaveKV(ETQ_CLOUD_CATALOGO, lista);
+}
+
+// Itens do estoque (contagem): onde as notas fiscais gravam o último preço pago
+function etqItensEstoque() {
+  const out = [];
+  for (const section of SECTIONS) {
+    if (section.key === 'RESUMO' || section.key === 'CMV') continue;
+    for (const g of section.groups) for (const it of g.items) out.push({ s: section.key, n: it.name, u: it.unit || 'un' });
+  }
+  return out;
+}
+
+function etqEstoqueItem(ref) {
+  if (!ref) return null;
+  return etqItensEstoque().find(i => i.s === ref.s && i.n === ref.n) || null;
+}
+
+function etqNormUnidade(u) {
+  u = normalizeForMatch(u || '');
+  if (/^(kg|kgs|kilo|kilos|quilo|quilos)$/.test(u)) return 'kg';
+  if (/^(l|lt|lts|litro|litros)$/.test(u)) return 'lt';
+  if (/^(un|uni|unid|unids|unidade|unidades)$/.test(u)) return 'un';
+  if (/^(mc|maco|macos)$/.test(u)) return 'mc';
+  if (/^(pct|pacote|pacotes)$/.test(u)) return 'pct';
+  return u;
+}
+
+// Preço do item: usa o da última nota SÓ quando o item está vinculado ao estoque E a unidade é a mesma
+// (ex: alface é kg no catálogo mas pacote no estoque → o preço da nota é por pacote, não serve:
+// fica o preço por kg manual/da planilha). Assim nunca se mistura kg com pacote.
+function etqPrecoItem(item) {
+  const est = etqEstoqueItem(item.estoqueRef);
+  if (est && etqNormUnidade(est.u) === etqNormUnidade(item.unidade)) {
+    const p = getLastPrice(est.s, est.n);
+    if (p > 0) return { preco: p, unidade: item.unidade || 'un', origem: 'nota' };
+  }
+  if (item.preco != null) return { preco: item.preco, unidade: item.unidade || 'un', origem: 'manual' };
+  return { preco: null, unidade: item.unidade || 'un', origem: null };
+}
+
+// Vínculo automático só quando o nome é idêntico (ignora maiúsculas/acentos). Retorna true se vinculou.
+function etqAutoVincularItem(item) {
+  if (item.estoqueRef || item.vinculoManual === false) return false;
+  const alvo = normalizeForMatch(item.nome);
+  const achou = etqItensEstoque().find(i => normalizeForMatch(i.n) === alvo);
+  if (!achou) return false;
+  item.estoqueRef = { s: achou.s, n: achou.n };
+  return true;
+}
+function etqAutoVincularTodos() {
+  let mudou = false;
+  for (const it of etqState.catalogo) if (it.ativo !== false && etqAutoVincularItem(it)) mudou = true;
+  return mudou;
+}
+
+function etqOpenGerenciar(filtro) {
+  const q = normalizeForMatch(filtro || '');
+  const itens = etqState.catalogo
+    .filter(i => i.ativo !== false && (!q || normalizeForMatch(i.nome).includes(q)))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    .slice(0, 60);
+  const linhas = itens.map(i => {
+    const pr = etqPrecoItem(i);
+    const precoTxt = pr.preco != null
+      ? `R$ ${fmt(pr.preco)}/${escHtml(pr.unidade)} · ${pr.origem === 'nota' ? 'última nota' : 'manual'}`
+      : 'sem preço';
+    return `
+      <div class="etq-hist-row" style="cursor:pointer" onclick="etqOpenEditarProduto('${i.id}')">
+        <div>
+          <strong>${escHtml(i.nome)}</strong>${i.pendenteRevisao ? ' <em class="etq-badge-revisar">revisar</em>' : ''}
+          <div class="etq-hist-meta">${escHtml(etqCategoriaById(i.cat).nome)} · ${precoTxt}</div>
+        </div>
+        <span style="color:#9ca3af">›</span>
+      </div>`;
+  }).join('');
+  etqShowInlineModal(`
+    <h2>Gerenciar produtos</h2>
+    <button class="inv-modal-btn" style="margin-bottom:10px" onclick="etqOpenEditarProduto(null)">+ Novo produto</button>
+    <div class="nota-field"><input id="etqGerBusca" type="text" placeholder="🔍 Buscar..." value="${escHtml(filtro || '')}" autocomplete="off"
+         onchange="etqOpenGerenciar(this.value)"></div>
+    <div class="etq-hist-list">${linhas || '<p class="etq-hint">Nenhum produto.</p>'}</div>
+    <button class="inv-modal-cancel" onclick="etqCloseInlineModal()">Fechar</button>
+  `, true);
+}
+
+function etqOpenEditarProduto(itemId) {
+  const item = itemId ? etqState.catalogo.find(i => i.id === itemId) : null;
+  const novo = !item;
+  const grupos = (typeof ETQ_GRUPOS_DEFAULT !== 'undefined') ? ETQ_GRUPOS_DEFAULT : [];
+  const grupoOpts = grupos.map(g => `<option value="${g.id}" ${item && (item.grupo || 'outros') === g.id ? 'selected' : ''}>${g.icon} ${escHtml(g.nome)}</option>`).join('');
+  const catOpts = etqState.categorias.map(c => `<option value="${c.id}" ${item && item.cat === c.id ? 'selected' : ''}>${escHtml(c.nome)}</option>`).join('');
+  const nomes = [...new Set(etqItensEstoque().map(i => i.n))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const datalist = nomes.map(n => `<option value="${escHtml(n)}">`).join('');
+  const refNome = item && item.estoqueRef ? item.estoqueRef.n : '';
+  const pr = item ? etqPrecoItem(item) : null;
+  const estVinc = item ? etqEstoqueItem(item.estoqueRef) : null;
+  const dicaUn = (estVinc && etqNormUnidade(estVinc.u) !== etqNormUnidade(item.unidade))
+    ? `<p style="font-size:12px;color:#b45309;margin:2px 0 8px">No estoque este item é contado em <strong>${escHtml(estVinc.u)}</strong> e aqui o preço é por <strong>${escHtml(item.unidade || 'un')}</strong>. Como as unidades são diferentes, o preço das notas não é usado — vale o preço manual.</p>` : '';
+
+  etqShowInlineModal(`
+    <h2>${novo ? 'Novo produto' : 'Editar produto'}</h2>
+    <input type="hidden" id="etqEdId" value="${item ? item.id : ''}">
+    <div class="nota-field"><label>Nome</label>
+      <input id="etqEdNome" type="text" value="${escHtml(item ? item.nome : '')}" autocomplete="off" ${novo ? 'onchange="etqEdSugerir()"' : ''}></div>
+    <div class="nota-field"><label>Grupo</label><select id="etqEdGrupo" class="inv-select-linha">${grupoOpts}</select></div>
+    <div class="nota-field"><label>Categoria de validade</label><select id="etqEdCat" class="inv-select-linha">${catOpts}</select></div>
+    <div class="nota-field"><label>Unidade do preço (kg, un, litro...)</label>
+      <input id="etqEdUnidade" type="text" value="${escHtml(item ? (item.unidade || 'un') : 'kg')}" autocomplete="off"></div>
+    <div class="nota-field"><label>Preço manual (R$) <span style="font-weight:400;color:#9ca3af">— usado se não houver nota</span></label>
+      <input id="etqEdPreco" type="text" inputmode="decimal" value="${item && item.preco != null ? item.preco : ''}" placeholder="Ex: 18,00" autocomplete="off"></div>
+    <div class="nota-field"><label>Item do estoque (puxa o preço das notas)</label>
+      <input id="etqEdEstoque" list="etqEdEstoqueList" type="text" value="${escHtml(refNome)}" placeholder="Digite pra buscar no estoque" autocomplete="off">
+      <datalist id="etqEdEstoqueList">${datalist}</datalist></div>
+    ${dicaUn}
+    ${pr && pr.preco != null ? `<p style="font-size:12px;color:#6b7280;margin:2px 0 8px">Preço em uso agora: <strong>R$ ${fmt(pr.preco)}/${escHtml(pr.unidade)}</strong> (${pr.origem === 'nota' ? 'última nota' : 'manual'})</p>` : ''}
+    <button class="inv-modal-btn" onclick="etqSalvarProduto()">Salvar</button>
+    ${novo ? '' : '<button class="inv-modal-cancel" style="color:#dc2626" onclick="etqArquivarProduto()">Remover produto</button>'}
+    <button class="inv-modal-cancel" onclick="etqOpenGerenciar()">Voltar</button>
+  `, true);
+}
+
+function etqEdSugerir() {
+  const nome = document.getElementById('etqEdNome').value.trim();
+  if (!nome) return;
+  const s = etqAutoCategorizar(nome);
+  document.getElementById('etqEdCat').value = s.cat;
+  document.getElementById('etqEdGrupo').value = s.grupo;
+  const alvo = normalizeForMatch(nome);
+  const achou = etqItensEstoque().find(i => normalizeForMatch(i.n) === alvo);
+  if (achou) document.getElementById('etqEdEstoque').value = achou.n;
+}
+
+async function etqSalvarProduto() {
+  const id    = document.getElementById('etqEdId').value || null;
+  const nome  = document.getElementById('etqEdNome').value.trim();
+  const grupo = document.getElementById('etqEdGrupo').value;
+  const cat   = document.getElementById('etqEdCat').value;
+  const precoNum = parseFloat(document.getElementById('etqEdPreco').value.replace(',', '.'));
+  const unidade = document.getElementById('etqEdUnidade').value.trim() || 'un';
+  const refNome = document.getElementById('etqEdEstoque').value.trim();
+  if (!nome) { showToast('Digite o nome'); return; }
+
+  let ref = null, semVinculo = false;
+  if (refNome) {
+    const est = etqItensEstoque().find(i => i.n === refNome);
+    if (!est) { showToast('Item do estoque não encontrado — escolha da lista'); return; }
+    ref = { s: est.s, n: est.n };
+  } else if (id) {
+    semVinculo = true; // gerência tirou o vínculo de propósito: não revincular sozinho
+  }
+
+  await etqUpdateCatalogo(l => {
+    let x = id ? l.find(i => i.id === id) : null;
+    if (!x) {
+      const slug = nome.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      x = { id: 'adm_' + slug + '_' + Date.now().toString(36), origem: 'cadastro_gerencia' };
+      l.push(x);
+    }
+    x.nome = nome; x.grupo = grupo; x.cat = cat; x.unidade = unidade;
+    x.preco = precoNum > 0 ? precoNum : null;
+    x.pendenteRevisao = false;
+    if (ref) { x.estoqueRef = ref; delete x.vinculoManual; }
+    else { delete x.estoqueRef; if (semVinculo) x.vinculoManual = false; }
+    if (!id) etqAutoVincularItem(x);
+  });
+  showToast('Produto salvo ✓');
+  etqOpenGerenciar();
+  etqRenderHome();
+}
+
+async function etqArquivarProduto() {
+  const id = document.getElementById('etqEdId').value;
+  const item = etqState.catalogo.find(i => i.id === id);
+  if (!item) return;
+  if (!confirm('Remover "' + item.nome + '" do catálogo? As etiquetas já impressas continuam no histórico.')) return;
+  await etqUpdateCatalogo(l => { const x = l.find(i => i.id === id); if (x) x.ativo = false; });
+  showToast('Produto removido');
+  etqOpenGerenciar();
+  etqRenderHome();
 }
